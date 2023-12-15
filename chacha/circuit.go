@@ -26,7 +26,7 @@ func (c *Circuit) Define(api frontend.API) error {
 	counter := c.Counter
 
 	for b := 0; b < Blocks; b++ {
-		// constants
+		// Fill state. Start with constants
 		state[0] = uints.NewU32(0x61707865)
 		state[1] = uints.NewU32(0x3320646e)
 		state[2] = uints.NewU32(0x79622d32)
@@ -34,20 +34,27 @@ func (c *Circuit) Define(api frontend.API) error {
 
 		// set key
 		copy(state[4:], c.Key[:])
+		// set counter
 		state[12] = counter
+		// set nonce
 		copy(state[13:], c.Nonce[:])
-
+		// modify state with round function
 		Round(uapi, &state)
+		// produce keystream from state
 		Serialize(uapi, &state)
 
+		// xor keystream with input
 		var ciphertext [16]uints.U32
 		for i, s := range state {
 			ciphertext[i] = uapi.Xor(c.In[b*16+i], s)
 		}
 
+		// check that output matches ciphertext
 		for i := 0; i < 16; i++ {
 			uapi.AssertEq(c.Out[b*16+i], ciphertext[i])
 		}
+
+		// increment counter for next block
 		counter = uapi.Add(counter, one)
 	}
 

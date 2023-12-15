@@ -55,48 +55,6 @@ func (c *qrBlock) Define(api frontend.API) error {
 	return nil
 }
 
-/*type cipherCircuit struct {
-	Key     [8]uints.U32
-	Counter uints.U32
-	Nonce   [3]uints.U32
-	In      [16]uints.U32 `gnark:",public"`
-	Out     [16]uints.U32 `gnark:",public"`
-}
-
-func (c *cipherCircuit) Define(api frontend.API) error {
-	uapi, err := uints.New[uints.U32](api)
-	if err != nil {
-		return err
-	}
-
-	var state [16]uints.U32
-
-	// constants
-	state[0] = uints.NewU32(0x61707865)
-	state[1] = uints.NewU32(0x3320646e)
-	state[2] = uints.NewU32(0x79622d32)
-	state[3] = uints.NewU32(0x6b206574)
-
-	// set key
-	copy(state[4:], c.Key[:])
-	state[12] = c.Counter
-	copy(state[13:], c.Nonce[:])
-
-	Round(uapi, &state)
-	Serialize(uapi, &state)
-
-	var ciphertext [16]uints.U32
-	for i, b := range state {
-		ciphertext[i] = uapi.Xor(c.In[i], b)
-	}
-
-	for i := range c.Out {
-		uapi.AssertEq(c.Out[i], ciphertext[i])
-	}
-
-	return nil
-}*/
-
 func TestQR(t *testing.T) {
 	assert := test.NewAssert(t)
 	witness := qrBlock{}
@@ -117,7 +75,7 @@ func TestQR(t *testing.T) {
 
 }
 
-func TestBlockGeneric(t *testing.T) {
+func TestRound(t *testing.T) {
 	assert := test.NewAssert(t)
 
 	in := uints.NewU32Array([]uint32{

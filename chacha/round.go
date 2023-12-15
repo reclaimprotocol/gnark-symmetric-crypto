@@ -10,20 +10,16 @@ func QR(uapi *uints.BinaryField[uints.U32], state *[16]uints.U32, i, j, k, l int
 	a, b, c, d := state[i], state[j], state[k], state[l]
 
 	a = uapi.Add(a, b)
-	d = uapi.Xor(d, a)
-	d = uapi.Lrot(d, 16)
+	d = uapi.Lrot(uapi.Xor(d, a), 16)
 
 	c = uapi.Add(c, d)
-	b = uapi.Xor(b, c)
-	b = uapi.Lrot(b, 12)
+	b = uapi.Lrot(uapi.Xor(b, c), 12)
 
 	a = uapi.Add(a, b)
-	d = uapi.Xor(d, a)
-	d = uapi.Lrot(d, 8)
+	d = uapi.Lrot(uapi.Xor(d, a), 8)
 
 	c = uapi.Add(c, d)
-	b = uapi.Xor(b, c)
-	b = uapi.Lrot(b, 7)
+	b = uapi.Lrot(uapi.Xor(b, c), 7)
 
 	state[i] = a
 	state[j] = b
@@ -45,11 +41,14 @@ func Round(uapi *uints.BinaryField[uints.U32], state *[16]uints.U32) {
 		QR(uapi, &workingState, 2, 7, 8, 13)
 		QR(uapi, &workingState, 3, 4, 9, 14)
 	}
+
+	// final step. Add initial state to working state
 	for i := 0; i < 16; i++ {
 		state[i] = uapi.Add(state[i], workingState[i])
 	}
 }
 
+// Serialize repacks words in LE byte order
 func Serialize(uapi *uints.BinaryField[uints.U32], state *[16]uints.U32) {
 	for i, s := range state {
 		o := uapi.UnpackLSB(s)
