@@ -24,12 +24,12 @@ func main() {
 func generateGroth16() error {
 	var circuit chacha.Circuit
 
-	r1cs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
+	r1css, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
 	if err != nil {
 		return err
 	}
 
-	pk, vk, err := groth16.Setup(r1cs)
+	pk, vk, err := groth16.Setup(r1css)
 	if err != nil {
 		return err
 	}
@@ -43,9 +43,10 @@ func generateGroth16() error {
 
 	counter := uints.NewU32(1)
 
-	bPt := make([]byte, 128)
+	bytes := chacha.Blocks * 64
+	bPt := make([]byte, bytes)
 	rand.Read(bPt)
-	bCt := make([]byte, 128)
+	bCt := make([]byte, bytes)
 
 	cipher, err := chacha20.NewUnauthenticatedCipher(bKey, bNonce)
 	if err != nil {
@@ -68,7 +69,7 @@ func generateGroth16() error {
 
 	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
 
-	proof, err := groth16.Prove(r1cs, pk, wtns)
+	proof, err := groth16.Prove(r1css, pk, wtns)
 
 	wp, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	err = groth16.Verify(proof, vk, wp)
