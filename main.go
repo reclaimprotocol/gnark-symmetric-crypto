@@ -1,17 +1,14 @@
 package main
 
 import (
-	"crypto/rand"
-
+	"fmt"
 	"log"
 
 	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
-	"github.com/consensys/gnark/std/math/uints"
+	"github.com/consensys/gnark/profile"
 	"github.com/reclaimprotocol/gnark-chacha20/chacha"
-	"golang.org/x/crypto/chacha20"
 )
 
 func main() {
@@ -22,25 +19,55 @@ func main() {
 }
 
 func generateGroth16() error {
-	var circuit chacha.Circuit
+	// var circuit chacha.Circuit
 
-	r1css, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
+	/*f, err := os.Open("f:\\r1cs")
+	r1css := groth16.NewCS(ecc.BN254)
+	r1css.ReadFrom(f)
+	f.Close()
+
+	f1, err := os.Open("f:\\pk")
+	pk := groth16.NewProvingKey(ecc.BN254)
+	pk.ReadFrom(f1)
+	f1.Close()*/
+
+	/*f2, err := os.Open("f:\\vk")
+	vk := groth16.NewVerifyingKey(ecc.BN254)
+	vk.ReadFrom(f2)
+	f2.Close()*/
+
+	p := profile.Start()
+	_, _ = frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &chacha.Circuit{})
+	p.Stop()
+
+	fmt.Println(p.NbConstraints())
+	fmt.Println(p.Top())
+	/*r1css, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
 	if err != nil {
 		return err
-	}
+	}*/
 
-	pk, vk, err := groth16.Setup(r1css)
+	/*f, err := os.OpenFile("f:\\r1cs", os.O_RDWR|os.O_CREATE, 0777)
+	r1css.WriteTo(f)
+	f.Close()*/
+
+	/*pk, vk, err := groth16.Setup(r1css)
 	if err != nil {
 		return err
-	}
+	}*/
 
-	bKey := []uint8{
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-		0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f}
+	/*f2, err := os.OpenFile("f:\\pk", os.O_RDWR|os.O_CREATE, 0777)
+	pk.WriteTo(f2)
+	f2.Close()
 
-	bNonce := []uint8{
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4a, 0x00, 0x00, 0x00, 0x00}
+	f3, err := os.OpenFile("f:\\vk", os.O_RDWR|os.O_CREATE, 0777)
+	vk.WriteTo(f3)
+	f3.Close()*/
 
+	/*bKey := make([]uint8, 32)
+	rand.Read(bKey)
+	bNonce := make([]uint8, 12)
+	rand.Read(bNonce)
 	counter := uints.NewU32(1)
 
 	bytes := chacha.Blocks * 64
@@ -57,8 +84,12 @@ func generateGroth16() error {
 	cipher.XORKeyStream(bCt, bPt)
 
 	plaintext := chacha.BytesToUint32BE(bPt)
-
 	ciphertext := chacha.BytesToUint32BE(bCt)
+
+	fmt.Printf("%0X\n", bKey)
+	fmt.Printf("%0X\n", bNonce)
+	fmt.Printf("%0X\n", bPt)
+	fmt.Printf("%0X\n", bCt)
 
 	witness := chacha.Circuit{}
 	copy(witness.Key[:], chacha.BytesToUint32LE(bKey))
@@ -71,7 +102,11 @@ func generateGroth16() error {
 
 	proof, err := groth16.Prove(r1css, pk, wtns)
 
-	wp, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
-	err = groth16.Verify(proof, vk, wp)
-	return err
+	f3, err := os.OpenFile("f:\\proof", os.O_RDWR|os.O_CREATE, 0777)
+	proof.WriteTo(f3)
+	f3.Close()
+
+	/*wp, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
+	err = groth16.Verify(proof, vk, wp)*/
+	return nil
 }
