@@ -14,16 +14,13 @@ go test ./...
 GOOS=js GOARCH=wasm go build -o chacha.wasm
 ```
 
-## Android
-install ARM64 gcc:
+## Android X86 and Arm64
+install latest NDK:
+set CC and CXX (use your paths)
 ```
-apt install gcc-aarch64-linux-gnu
+CC=/home/scratch/android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android30-clang CXX=/home/scratch/android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android30-clang++ CGO_ENABLED=1 GOOS=android GOARCH=amd64 go build -buildmode=c-shared -o libprove.so prove/bind.go
+CC=/home/scratch/android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang CXX=/home/scratch/android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang++ CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build -buildmode=c-shared -o libprove.so prove/bind.go
 ```
-set CC
-```
-export CC=aarch64-linux-gnu-gcc
-```
-GOOS=linux GOARCH=arm64 go build -buildmode=c-shared -o prove.so prove/bind.go
-```
+
 
 

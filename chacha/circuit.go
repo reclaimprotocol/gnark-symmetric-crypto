@@ -5,13 +5,13 @@ import (
 	"github.com/consensys/gnark/std/math/uints"
 )
 
-const Blocks = 10
+const Blocks = 16
 
 type Circuit struct {
 	Key     [8]uints.U32
 	Counter uints.U32
 	Nonce   [3]uints.U32
-	In      [16 * Blocks]uints.U32 // `gnark:",public"`
+	In      [16 * Blocks]uints.U32 `gnark:",public"`
 	Out     [16 * Blocks]uints.U32 `gnark:",public"`
 }
 

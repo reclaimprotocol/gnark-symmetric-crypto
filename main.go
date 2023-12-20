@@ -6,6 +6,9 @@ import (
 	_ "embed"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"time"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -16,18 +19,30 @@ import (
 	"golang.org/x/crypto/chacha20"
 )
 
-func main() {
-	err := generateGroth16()
-	if err != nil {
-		log.Fatal("groth16 error:", err)
-	}
-}
+import (
+	_ "net/http/pprof"
+)
 
-/*//go:embed r1cs
+//go:embed prove/r1cs
 var r1cs_embedded []byte
 
-//go:embed pk
-var pk_embedded []byte*/
+//go:embed prove/pk
+var pk_embedded []byte
+
+func main() {
+
+	go func() {
+		http.ListenAndServe("localhost:8088", nil)
+	}()
+	time.Sleep(time.Second * 10)
+	for i := 0; i < 10; i++ {
+		err := ProveG16()
+		if err != nil {
+			log.Fatal("groth16 error:", err)
+		}
+	}
+	time.Sleep(time.Second * 1000)
+}
 
 // var r1css = groth16.NewCS(ecc.BN254)
 // var pk groth16.ProvingKey
@@ -120,27 +135,32 @@ func generateGroth16() error {
 
 	fmt.Println(p.NbConstraints())
 	fmt.Println(p.Top())*/
-	r1css, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
+
+	curve := ecc.BN254.ScalarField()
+
+	r1css, err := frontend.Compile(curve, r1cs.NewBuilder, &circuit)
 	if err != nil {
 		return err
 	}
 
-	/*f, err := os.OpenFile("f:\\r1cs", os.O_RDWR|os.O_CREATE, 0777)
+	fmt.Printf("Blocks: %d, constraints: %d\n", chacha.Blocks, r1css.GetNbConstraints())
+
+	f, err := os.OpenFile("f:\\r1cs", os.O_RDWR|os.O_CREATE, 0777)
 	r1css.WriteTo(f)
-	f.Close()*/
+	f.Close()
 
 	pk, vk, err := groth16.Setup(r1css)
 	if err != nil {
 		return err
 	}
 
-	/*f2, err := os.OpenFile("f:\\pk", os.O_RDWR|os.O_CREATE, 0777)
+	f2, err := os.OpenFile("f:\\pk", os.O_RDWR|os.O_CREATE, 0777)
 	pk.WriteTo(f2)
 	f2.Close()
 
 	f3, err := os.OpenFile("f:\\vk", os.O_RDWR|os.O_CREATE, 0777)
 	vk.WriteTo(f3)
-	f3.Close()*/
+	f3.Close()
 
 	bKey := make([]uint8, 32)
 	rand.Read(bKey)
@@ -175,8 +195,9 @@ func generateGroth16() error {
 	witness.Counter = counter
 	copy(witness.In[:], plaintext)
 	copy(witness.Out[:], ciphertext)
-
-	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
+	fmt.Println("witness")
+	wtns, err := frontend.NewWitness(&witness, curve)
+	fmt.Println("prove")
 
 	proof, err := groth16.Prove(r1css, pk, wtns)
 	buf := &bytes.Buffer{}
@@ -190,8 +211,57 @@ func generateGroth16() error {
 	proof.WriteTo(f3)
 	f3.Close()*/
 
-	wp, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
+	wp, err := frontend.NewWitness(&witness, curve, frontend.PublicOnly())
 	err = groth16.Verify(proof, vk, wp)
 	fmt.Println("proof ok", err == nil)
 	return nil
+}
+
+func ProveG16() error {
+	key := make([]uint8, 32)
+	rand.Read(key)
+	nonce := make([]uint8, 12)
+	rand.Read(nonce)
+	cnt := uints.NewU32(1)
+
+	dataBytes := chacha.Blocks * 64
+	bPt := make([]byte, dataBytes)
+	rand.Read(bPt)
+	bCt := make([]byte, dataBytes)
+
+	cipher, err := chacha20.NewUnauthenticatedCipher(key, nonce)
+	if err != nil {
+		return err
+	}
+
+	cipher.SetCounter(1)
+	cipher.XORKeyStream(bCt, bPt)
+
+	plaintext := chacha.BytesToUint32BE(bPt)
+	ciphertext := chacha.BytesToUint32BE(bCt)
+
+	r1css := groth16.NewCS(ecc.BN254)
+	_, err = r1css.ReadFrom(bytes.NewBuffer(r1cs_embedded))
+	if err != nil {
+		panic(err)
+	}
+
+	pk := groth16.NewProvingKey(ecc.BN254)
+	_, err = pk.ReadFrom(bytes.NewBuffer(pk_embedded))
+	if err != nil {
+		panic(err)
+	}
+
+	witness := chacha.Circuit{}
+	copy(witness.Key[:], chacha.BytesToUint32LE(key))
+	copy(witness.Nonce[:], chacha.BytesToUint32LE(nonce))
+	witness.Counter = cnt
+	copy(witness.In[:], plaintext)
+	copy(witness.Out[:], ciphertext)
+	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
+	if err != nil {
+		panic(err)
+	}
+	_, err = groth16.Prove(r1css, pk, wtns)
+	return err
 }

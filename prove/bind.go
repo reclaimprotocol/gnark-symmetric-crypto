@@ -4,7 +4,6 @@ import "C"
 import (
 	"bytes"
 	_ "embed"
-	"fmt"
 	"unsafe"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -15,9 +14,7 @@ import (
 	"github.com/reclaimprotocol/gnark-chacha20/chacha"
 )
 
-/* #include <stdlib.h>
-   #include <stdint.h>
-*/
+// #include <stdlib.h>
 import (
 	"C"
 )
@@ -30,27 +27,32 @@ func Free(pointer unsafe.Pointer) {
 }
 
 //go:embed r1cs
-var r1cs_embedded []byte
+var r1csEmbedded []byte
 
 //go:embed pk
-var pk_embedded []byte
+var pkEmbedded []byte
 var r1css constraint.ConstraintSystem
 var pk groth16.ProvingKey
 
 func init() {
-	fmt.Println("about to read key & circuit")
 	r1css = groth16.NewCS(ecc.BN254)
-	_, err := r1css.ReadFrom(bytes.NewBuffer(r1cs_embedded))
+	_, err := r1css.ReadFrom(bytes.NewBuffer(r1csEmbedded))
 	if err != nil {
 		panic(err)
 	}
 
 	pk = groth16.NewProvingKey(ecc.BN254)
-	_, err = pk.ReadFrom(bytes.NewBuffer(pk_embedded))
+	_, err = pk.ReadFrom(bytes.NewBuffer(pkEmbedded))
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("read key & circuit")
+}
+
+//export Init
+func Init() {
+	if len(r1csEmbedded) == 0 || len(pkEmbedded) == 0 {
+		panic("could not load circuit and proving key")
+	}
 }
 
 //export Prove
