@@ -5,9 +5,9 @@ import (
 	"github.com/consensys/gnark/std/math/uints"
 )
 
-const Blocks = 16
+const Blocks = 1
 
-type Circuit struct {
+type ChaChaCircuit struct {
 	Key     []uints.U32
 	Counter uints.U32 `gnark:",public"`
 	Nonce   []uints.U32
@@ -15,7 +15,7 @@ type Circuit struct {
 	Out     []uints.U32 `gnark:",public"`
 }
 
-func (c *Circuit) Define(api frontend.API) error {
+func (c *ChaChaCircuit) Define(api frontend.API) error {
 	uapi, err := uints.New[uints.U32](api)
 	if err != nil {
 		return err

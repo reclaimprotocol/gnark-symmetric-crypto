@@ -7,6 +7,7 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/math/uints"
 	"github.com/consensys/gnark/test"
+	"github.com/reclaimprotocol/gnark-chacha20/utils"
 	"golang.org/x/crypto/chacha20"
 )
 
@@ -84,7 +85,7 @@ func TestRound(t *testing.T) {
 		0x13121110, 0x17161514, 0x1b1a1918, 0x1f1e1d1c,
 		0x00000001, 0x09000000, 0x4a000000, 0x00000000})
 
-	out := BytesToUint32BE([]uint8{
+	out := utils.BytesToUint32BE([]uint8{
 		0x10, 0xf1, 0xe7, 0xe4, 0xd1, 0x3b, 0x59, 0x15, 0x50, 0x0f, 0xdd, 0x1f, 0xa3, 0x20, 0x71, 0xc4,
 		0xc7, 0xd1, 0xf4, 0xc7, 0x33, 0xc0, 0x68, 0x03, 0x04, 0x22, 0xaa, 0x9a, 0xc3, 0xd4, 0x6c, 0x4e,
 		0xd2, 0x82, 0x64, 0x46, 0x07, 0x9f, 0xaa, 0x09, 0x14, 0xc2, 0xd7, 0x05, 0xd9, 0x8b, 0x02, 0xa2,
@@ -133,9 +134,9 @@ func TestCipher(t *testing.T) {
 		0xbf, 0x02, 0x10, 0x6a, 0x16, 0x53, 0x3a, 0xc0, 0xe6, 0x9f, 0x9c, 0xaf, 0x5c, 0xff, 0xb0, 0x81,
 	}
 
-	plaintext := BytesToUint32BE(bPt)
+	plaintext := utils.BytesToUint32BE(bPt)
 
-	ciphertext := BytesToUint32BE(bCt)
+	ciphertext := utils.BytesToUint32BE(bCt)
 
 	ct := make([]byte, 128)
 
@@ -145,15 +146,15 @@ func TestCipher(t *testing.T) {
 	cipher.SetCounter(1)
 	cipher.XORKeyStream(ct, bPt)
 
-	witness := Circuit{}
-	copy(witness.Key[:], BytesToUint32LE(bKey))
-	copy(witness.Nonce[:], BytesToUint32LE(bNonce))
+	witness := ChaChaCircuit{}
+	copy(witness.Key[:], utils.BytesToUint32LE(bKey))
+	copy(witness.Nonce[:], utils.BytesToUint32LE(bNonce))
 	witness.Counter = counter
 	copy(witness.In[:], plaintext)
 	copy(witness.Out[:], ciphertext)
 
-	err = test.IsSolved(&Circuit{}, &witness, ecc.BN254.ScalarField())
+	err = test.IsSolved(&ChaChaCircuit{}, &witness, ecc.BN254.ScalarField())
 	assert.NoError(err)
 
-	assert.CheckCircuit(&Circuit{}, test.WithCurves(ecc.BN254))
+	assert.CheckCircuit(&ChaChaCircuit{}, test.WithCurves(ecc.BN254))
 }

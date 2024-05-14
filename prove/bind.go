@@ -11,7 +11,7 @@ import (
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/math/uints"
-	"github.com/reclaimprotocol/gnark-chacha20/chacha"
+	"github.com/reclaimprotocol/gnark-chacha20/utils"
 )
 
 // #include <stdlib.h>
@@ -46,6 +46,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	// log.Panicf("Init ok. Took %s\n", time.Since(t))
 }
 
 //export Init
@@ -55,14 +56,37 @@ func Init() {
 	}
 }
 
+type Witness struct {
+	Key     []uints.U32
+	Counter uints.U32 `gnark:",public"`
+	Nonce   []uints.U32
+	In      []uints.U32 `gnark:",public"`
+	Out     []uints.U32 `gnark:",public"`
+}
+
+func (c *Witness) Define(api frontend.API) error {
+	return nil
+}
+
 //export Prove
-func Prove(key, nonce []byte, cnt C.int, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
-	witness := chacha.Circuit{}
-	copy(witness.Key[:], chacha.BytesToUint32LE(key))
-	copy(witness.Nonce[:], chacha.BytesToUint32LE(nonce))
+func Prove(key []byte, nonce []byte, cnt C.int, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
+	uplaintext := utils.BytesToUint32BE(plaintext)
+	uciphertext := utils.BytesToUint32BE(ciphertext)
+	ukey := utils.BytesToUint32LE(key)
+	unonce := utils.BytesToUint32LE(nonce)
+
+	witness := Witness{
+		Counter: uints.NewU32(0),
+		Key:     make([]uints.U32, len(ukey)),
+		Nonce:   make([]uints.U32, len(unonce)),
+		In:      make([]uints.U32, len(uplaintext)),
+		Out:     make([]uints.U32, len(uciphertext)),
+	}
+	copy(witness.Key[:], ukey)
+	copy(witness.Nonce[:], unonce)
 	witness.Counter = uints.NewU32(uint32(cnt))
-	copy(witness.In[:], chacha.BytesToUint32BE(plaintext))
-	copy(witness.Out[:], chacha.BytesToUint32BE(ciphertext))
+	copy(witness.In[:], uplaintext)
+	copy(witness.Out[:], uciphertext)
 	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
 	if err != nil {
 		panic(err)
