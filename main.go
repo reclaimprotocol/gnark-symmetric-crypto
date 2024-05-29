@@ -14,6 +14,7 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/std/math/uints"
+	"github.com/reclaimprotocol/gnark-chacha20/aes"
 	"github.com/reclaimprotocol/gnark-chacha20/chacha"
 	"github.com/reclaimprotocol/gnark-chacha20/utils"
 
@@ -51,8 +52,10 @@ func main() {
 		}
 	}
 	time.Sleep(time.Second * 1000)*/
-	generateGroth16()
+	// generateGroth16()
 	// trySerialize()
+
+	generateAES()
 }
 
 // var r1css = groth16.NewCS(ecc.BN254)
@@ -353,3 +356,42 @@ func trySerialize() {
 	r1css.ReadFrom(bytes.NewBuffer(buf.Bytes()))
 	fmt.Println(r1css.GetNbConstraints())
 }*/
+
+func generateAES() {
+	curve := ecc.BN254.ScalarField()
+
+	witness := aes.AES128Wrapper{
+		Key:        [16]frontend.Variable{},
+		Plaintext:  [16]frontend.Variable{},
+		Ciphertext: [16]frontend.Variable{},
+	}
+
+	t := time.Now()
+	r1css, err := frontend.Compile(curve, r1cs.NewBuilder, &witness, frontend.WithCompressThreshold(10), frontend.WithCapacity(500000))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("compile took ", time.Since(t))
+
+	fmt.Printf("Blocks: %d, constraints: %d\n", chacha.Blocks, r1css.GetNbConstraints())
+
+	os.Remove("f:\\r1cs.aes")
+	os.Remove("f:\\pk.aes")
+	os.Remove("f:\\vk.aes")
+	f, err := os.OpenFile("f:\\r1cs.aes", os.O_RDWR|os.O_CREATE, 0777)
+	r1css.WriteTo(f)
+	f.Close()
+
+	pk1, vk1, err := groth16.Setup(r1css)
+	if err != nil {
+		panic(err)
+	}
+
+	f2, err := os.OpenFile("f:\\pk.aes", os.O_RDWR|os.O_CREATE, 0777)
+	pk1.WriteTo(f2)
+	f2.Close()
+
+	f3, err := os.OpenFile("f:\\vk.aes", os.O_RDWR|os.O_CREATE, 0777)
+	vk1.WriteTo(f3)
+	f3.Close()
+}
