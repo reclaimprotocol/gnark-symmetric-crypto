@@ -20,6 +20,8 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/test"
 )
@@ -27,43 +29,45 @@ import (
 func TestAES128(t *testing.T) {
 	assert := test.NewAssert(t)
 
-	key := "ab72c77b97cb5fe9a382d9fe81ffdbed"
-	plaintext := "54cc7dc2c37ec006bcc6d1da00000002"
-	ciphertext := "0e67807b545e76e666750658b707181a"
-
-	byteSlice, _ := hex.DecodeString(key)
-	keyByteLen := len(byteSlice)
-	byteSlice, _ = hex.DecodeString(plaintext)
-	ptByteLen := len(byteSlice)
-	byteSlice, _ = hex.DecodeString(ciphertext)
-	ctByteLen := len(byteSlice)
+	key := "7E24067817FAE0D743D6CE1F32539163"
+	plaintext := "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F"
+	ciphertext := "5104A106168A72D9790D41EE8EDAD388EB2E1EFC46DA57C8FCE630DF9141BE28"
+	Nonce := "006CB6DBC0543B59DA48D90B"
+	Counter := 1
 
 	keyAssign := StrToIntSlice(key, true)
 	ptAssign := StrToIntSlice(plaintext, true)
 	ctAssign := StrToIntSlice(ciphertext, true)
+	nonceAssign := StrToIntSlice(Nonce, true)
 
 	// witness values preparation
 	assignment := AES128Wrapper{
 		Key:        [16]frontend.Variable{},
-		Plaintext:  [16]frontend.Variable{},
-		Ciphertext: [16]frontend.Variable{},
+		Counter:    Counter,
+		Nonce:      [12]frontend.Variable{},
+		Plaintext:  [32]frontend.Variable{},
+		Ciphertext: [32]frontend.Variable{},
 	}
 
 	// assign values here because required to use make in assignment
-	for i := 0; i < keyByteLen; i++ {
+	for i := 0; i < len(keyAssign); i++ {
 		assignment.Key[i] = keyAssign[i]
 	}
-	for i := 0; i < ptByteLen; i++ {
+	for i := 0; i < len(ptAssign); i++ {
 		assignment.Plaintext[i] = ptAssign[i]
 	}
-	for i := 0; i < ctByteLen; i++ {
+	for i := 0; i < len(ctAssign); i++ {
 		assignment.Ciphertext[i] = ctAssign[i]
+	}
+
+	for i := 0; i < len(nonceAssign); i++ {
+		assignment.Nonce[i] = nonceAssign[i]
 	}
 
 	// var circuit SHA256
 	var circuit AES128Wrapper
 
-	assert.SolvingSucceeded(&circuit, &assignment)
+	assert.CheckCircuit(&circuit, test.WithValidAssignment(&assignment), test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254))
 }
 
 func StrToIntSlice(inputData string, hexRepresentation bool) []int {
