@@ -91,7 +91,7 @@ func (aes *AES256) Encrypt(key [KEY_SIZE_BYTES]frontend.Variable, pt [16]fronten
 
 	state = aes.SubBytes(sbox0, state)
 	state = aes.ShiftRows(state)
-	state = aes.AddRoundKey2(state, expandedKey, 14*4*4)
+	state = aes.AddRoundKey2(state, expandedKey, ROUNDS*4*4)
 
 	var out [16]frontend.Variable
 	ctr := 0
@@ -253,7 +253,7 @@ func (aes *AES256) VariableXor(a frontend.Variable, b frontend.Variable, size in
 	return aes.api.FromBinary(x...)
 }
 
-// expands 16 byte key to 176 byte output
+// expands 16 byte key to 240 byte output
 func (aes *AES256) ExpandKey(key [KEY_SIZE_BYTES]frontend.Variable, sbox0 [256]frontend.Variable, RCon [11]frontend.Variable) [KS_WORDS * 4]frontend.Variable {
 
 	var expand [KS_WORDS * 4]frontend.Variable
