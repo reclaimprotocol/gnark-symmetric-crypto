@@ -17,9 +17,10 @@ limitations under the License.
 package aes
 
 import (
-	"encoding/hex"
 	"testing"
 
+	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/test"
 )
@@ -28,41 +29,43 @@ func TestAES256(t *testing.T) {
 
 	assert := test.NewAssert(t)
 
-	key := "603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4"
-	plaintext := "f69f2445df4f9b17ad2b417be66c3710"
-	ciphertext := "23304b7a39f9f3ff067d8d8f9e24ecc7"
-
-	byteSlice, _ := hex.DecodeString(key)
-	keyByteLen := len(byteSlice)
-	byteSlice, _ = hex.DecodeString(plaintext)
-	ptByteLen := len(byteSlice)
-	byteSlice, _ = hex.DecodeString(ciphertext)
-	ctByteLen := len(byteSlice)
+	key := "F6D66D6BD52D59BB0796365879EFF886C66DD51A5B6A99744B50590C87A23884"
+	plaintext := "000102030405060708090A0B0C0D0E0F" + "101112131415161718191A1B1C1D1E1F"
+	ciphertext := "F05E231B3894612C49EE000B804EB2A9" + "B8306B508F839D6A5530831D9344AF1C"
+	Nonce := "00FAAC24C1585EF15A43D875"
+	Counter := 1
 
 	keyAssign := StrToIntSlice(key, true)
 	ptAssign := StrToIntSlice(plaintext, true)
 	ctAssign := StrToIntSlice(ciphertext, true)
+	nonceAssign := StrToIntSlice(Nonce, true)
 
 	// witness values preparation
 	assignment := AES256Wrapper{
 		Key:        [32]frontend.Variable{},
-		Plaintext:  [16]frontend.Variable{},
-		Ciphertext: [16]frontend.Variable{},
+		Counter:    Counter,
+		Nonce:      [12]frontend.Variable{},
+		Plaintext:  [32]frontend.Variable{},
+		Ciphertext: [32]frontend.Variable{},
 	}
 
 	// assign values here because required to use make in assignment
-	for i := 0; i < keyByteLen; i++ {
+	for i := 0; i < len(keyAssign); i++ {
 		assignment.Key[i] = keyAssign[i]
 	}
-	for i := 0; i < ptByteLen; i++ {
+	for i := 0; i < len(ptAssign); i++ {
 		assignment.Plaintext[i] = ptAssign[i]
 	}
-	for i := 0; i < ctByteLen; i++ {
+	for i := 0; i < len(ctAssign); i++ {
 		assignment.Ciphertext[i] = ctAssign[i]
+	}
+
+	for i := 0; i < len(nonceAssign); i++ {
+		assignment.Nonce[i] = nonceAssign[i]
 	}
 
 	// var circuit SHA256
 	var circuit AES256Wrapper
 
-	assert.CheckCircuit(&circuit, test.WithValidAssignment(&assignment))
+	assert.CheckCircuit(&circuit, test.WithValidAssignment(&assignment), test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254))
 }

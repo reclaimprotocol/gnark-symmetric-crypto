@@ -1,6 +1,8 @@
 package aes
 
 import (
+	"fmt"
+
 	"github.com/consensys/gnark/frontend"
 )
 
@@ -9,10 +11,14 @@ const ROUNDS = 14
 const NB = 4 // columns
 const KS_WORDS = NB * (ROUNDS + 1)
 
+const BLOCKS = 2
+
 type AES256Wrapper struct {
 	Key        [KEY_SIZE_BYTES]frontend.Variable
-	Plaintext  [16]frontend.Variable
-	Ciphertext [16]frontend.Variable `gnark:"public"`
+	Nonce      [12]frontend.Variable
+	Counter    frontend.Variable
+	Plaintext  [BLOCKS * 16]frontend.Variable
+	Ciphertext [BLOCKS * 16]frontend.Variable `gnark:"public"`
 }
 
 func (circuit *AES256Wrapper) Define(api frontend.API) error {
@@ -20,16 +26,58 @@ func (circuit *AES256Wrapper) Define(api frontend.API) error {
 	// init aes gadget
 	aes := NewAES256(api)
 
-	// encrypt plaintext under key
-	cipher := aes.Encrypt(circuit.Key, circuit.Plaintext)
+	var counter [16]frontend.Variable
 
-	// constraints check
-	for i := 0; i < 16; i++ {
-		api.AssertIsEqual(circuit.Ciphertext[i], cipher[i])
+	for i := 0; i < 12; i++ {
+		counter[i] = circuit.Nonce[i]
 	}
+	for b := 0; b < BLOCKS; b++ {
+		counterBytes := unpackMSB(api, circuit.Counter)
+		for i := 0; i < 4; i++ {
+			counter[12+i] = counterBytes[i]
+		}
+		// encrypt counter under key
+		keystream := aes.Encrypt(circuit.Key, counter)
 
+		for i := 0; i < 16; i++ {
+
+			t := Xor(api, keystream[i], circuit.Plaintext[b*16+i], 8)
+
+			api.AssertIsEqual(circuit.Ciphertext[b*16+i], t)
+		}
+		circuit.Counter = api.Add(circuit.Counter, 1)
+	}
 	// return error
 	return nil
+}
+
+func Xor(api frontend.API, a, b frontend.Variable, size int) frontend.Variable {
+	aBits := api.ToBinary(a, size)
+	bBits := api.ToBinary(b, size)
+	var resBits []frontend.Variable
+	for i := 0; i < size; i++ {
+		resBits = append(resBits, api.Xor(aBits[i], bBits[i]))
+	}
+	return api.FromBinary(resBits...)
+}
+
+func unpackMSB(api frontend.API, a frontend.Variable) []frontend.Variable {
+	aBits := api.ToBinary(a, 32)
+	var res [4]frontend.Variable
+	for i := 0; i < 4; i++ {
+		res[3-i] = api.FromBinary(aBits[i*8 : i*8+8]...)
+	}
+	return res[:]
+}
+
+func (aes *AES256) logT(t []frontend.Variable) {
+
+	res := ""
+	for i := 0; i < len(t); i++ {
+		res += fmt.Sprintf("%0.2X ", t[i])
+	}
+
+	aes.api.Println(res)
 }
 
 type AES256 struct {
