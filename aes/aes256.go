@@ -1,6 +1,8 @@
 package aes
 
 import (
+	"math"
+
 	"github.com/consensys/gnark/frontend"
 )
 
@@ -38,13 +40,13 @@ func (circuit *AES256Wrapper) Define(api frontend.API) error {
 		keystream := aes.Encrypt(circuit.Key, counterBlock)
 
 		for i := 0; i < 16; i++ {
-			t := aes.VariableXor(keystream[i], circuit.Plaintext[b*16+i], 8)
-			api.AssertIsEqual(circuit.Ciphertext[b*16+i], t)
+			api.AssertIsEqual(circuit.Ciphertext[b*16+i], aes.VariableXor(keystream[i], circuit.Plaintext[b*16+i], 8))
 		}
-		counter = api.Add(circuit.Counter, 1)
+		counter = api.Add(counter, 1)
+		api.AssertIsLessOrEqual(counter, math.MaxUint32)
 	}
 
-	api.AssertIsEqual(counter, api.Add(circuit.Counter, BLOCKS-1))
+	api.AssertIsEqual(counter, api.Add(circuit.Counter, BLOCKS))
 	return nil
 }
 
@@ -73,7 +75,7 @@ func (aes *AES256) Encrypt(key [KEY_SIZE_BYTES]frontend.Variable, pt [16]fronten
 		state[12+k] = pt[i+3]
 		i += 4
 	}
-	state = aes.AddRoundKey(state, expandedKey[:], 0) // works
+	state = aes.AddRoundKey(state, expandedKey[:], 0)
 
 	// iterate rounds
 	i = 1
@@ -81,7 +83,7 @@ func (aes *AES256) Encrypt(key [KEY_SIZE_BYTES]frontend.Variable, pt [16]fronten
 		state = aes.SubBytes(state)
 		state = aes.ShiftRows(state)
 		state = aes.MixColumns(state)
-		state = aes.AddRoundKey2(state, expandedKey[:], i*4*4) // woks
+		state = aes.AddRoundKey2(state, expandedKey[:], i*4*4)
 	}
 
 	state = aes.SubBytes(state)

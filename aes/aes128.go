@@ -17,6 +17,8 @@ limitations under the License.
 package aes
 
 import (
+	"math"
+
 	"github.com/consensys/gnark/frontend"
 )
 
@@ -33,11 +35,13 @@ func (circuit *AES128Wrapper) Define(api frontend.API) error {
 	// init aes gadget
 	aes := NewAES128(api)
 	counter := circuit.Counter
+
 	var counterBlock [16]frontend.Variable
 
 	for i := 0; i < 12; i++ {
 		counterBlock[i] = circuit.Nonce[i]
 	}
+
 	for b := 0; b < BLOCKS; b++ {
 		counterBytes := aes.unpackMSB(counter)
 		for i := 0; i < 4; i++ {
@@ -50,9 +54,10 @@ func (circuit *AES128Wrapper) Define(api frontend.API) error {
 			t := aes.VariableXor(keystream[i], circuit.Plaintext[b*16+i], 8)
 			api.AssertIsEqual(circuit.Ciphertext[b*16+i], t)
 		}
-		counter = api.Add(circuit.Counter, 1)
+		counter = api.Add(counter, 1)
+		api.AssertIsLessOrEqual(counter, math.MaxUint32)
 	}
-	api.AssertIsEqual(counter, api.Add(circuit.Counter, BLOCKS-1))
+	api.AssertIsEqual(counter, api.Add(circuit.Counter, BLOCKS))
 	return nil
 }
 
