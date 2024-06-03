@@ -192,11 +192,11 @@ func (aes *AESGadget) Subw(sbox [256]frontend.Variable, a frontend.Variable) fro
 	return out
 }
 
-func (aes *AESGadget) unpackMSB(a frontend.Variable) []frontend.Variable {
-	aBits := aes.api.ToBinary(a, 32)
-	var res [4]frontend.Variable
+func (aes *AESGadget) createIV(counter frontend.Variable, iv []frontend.Variable) {
+	aBits := aes.api.ToBinary(counter, 32)
+
 	for i := 0; i < 4; i++ {
-		res[3-i] = aes.api.FromBinary(aBits[i*8 : i*8+8]...)
+		iv[15-i] = aes.api.FromBinary(aBits[i*8 : i*8+8]...)
 	}
-	return res[:]
+
 }
