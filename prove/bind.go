@@ -35,17 +35,19 @@ var r1css constraint.ConstraintSystem
 var pk groth16.ProvingKey
 
 func init() {
-	r1css = groth16.NewCS(ecc.BN254)
-	_, err := r1css.ReadFrom(bytes.NewBuffer(r1csEmbedded))
-	if err != nil {
-		panic(err)
-	}
+	go func() {
+		r1css = groth16.NewCS(ecc.BN254)
+		_, err := r1css.ReadFrom(bytes.NewBuffer(r1csEmbedded))
+		if err != nil {
+			panic(err)
+		}
 
-	pk = groth16.NewProvingKey(ecc.BN254)
-	_, err = pk.ReadFrom(bytes.NewBuffer(pkEmbedded))
-	if err != nil {
-		panic(err)
-	}
+		pk = groth16.NewProvingKey(ecc.BN254)
+		_, err = pk.ReadFrom(bytes.NewBuffer(pkEmbedded))
+		if err != nil {
+			panic(err)
+		}
+	}()
 	// log.Panicf("Init ok. Took %s\n", time.Since(t))
 }
 
@@ -76,7 +78,7 @@ func Prove(key []byte, nonce []byte, cnt C.int, plaintext, ciphertext []byte) (u
 	unonce := utils.BytesToUint32LE(nonce)
 
 	witness := Witness{
-		Counter: uints.NewU32(0),
+		Counter: uints.NewU32(uint32(cnt)),
 		Key:     make([]uints.U32, len(ukey)),
 		Nonce:   make([]uints.U32, len(unonce)),
 		In:      make([]uints.U32, len(uplaintext)),
@@ -84,7 +86,6 @@ func Prove(key []byte, nonce []byte, cnt C.int, plaintext, ciphertext []byte) (u
 	}
 	copy(witness.Key[:], ukey)
 	copy(witness.Nonce[:], unonce)
-	witness.Counter = uints.NewU32(uint32(cnt))
 	copy(witness.In[:], uplaintext)
 	copy(witness.Out[:], uciphertext)
 	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
