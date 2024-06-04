@@ -97,8 +97,9 @@ class _MyHomePageState extends State<MyHomePage> {
       final nonce = hexToGoSlice('CF3F95A5033F258FE329C9E4');
       final plaintext = hexToGoSlice('EA2D019860FA70BC851D859BBF7C4CD7BB6684B0E4D1E820F481DD8B1EE7449E03AE65DD401FB9D61F74CD1A12C9449AFB56FE57D3CC6B891F7C9572CDD1C808');
       final ciphertext = hexToGoSlice('EC05114D08BD31DBB4EF538FC713B8A6206482FCB81891276A74B76D2273AC4B7BF193F3DA1B7125735F06A88AF0B73832EB97F3E1FE0286D4D852B860B97AA4');
+      final counter = hexToGoSlice('00000001');
 
-      final proof = prover.Prove(key.ref, nonce.ref, 1, plaintext.ref, ciphertext.ref);
+      final proof = prover.ProveChaCha(counter.ref, key.ref, nonce.ref, plaintext.ref, ciphertext.ref);
       final proofStr = HEX.encode(proof.r0.asTypedList(proof.r1));
       prover.Free(proof.r0);
       calloc.free(key.ref.data);
@@ -109,7 +110,52 @@ class _MyHomePageState extends State<MyHomePage> {
       calloc.free(plaintext);
       calloc.free(ciphertext.ref.data);
       calloc.free(ciphertext);
-      _proof = proofStr;
+      calloc.free(counter.ref.data);
+      calloc.free(counter);
+      _proof = 'ChaCha: $proofStr';
+
+
+      final keyAES128 = hexToGoSlice('7E24067817FAE0D743D6CE1F32539163');
+      final nonceAES128  = hexToGoSlice('006CB6DBC0543B59DA48D90B');
+      final plaintextAES128  =  hexToGoSlice('000102030405060708090A0B0C0D0E0F');
+      final ciphertextAES128  = hexToGoSlice('5104A106168A72D9790D41EE8EDAD388');
+      final counterAES128 = hexToGoSlice('00000001');
+
+      final proofAES128  = prover.ProveAES128(counterAES128.ref, keyAES128.ref, nonceAES128.ref, plaintextAES128.ref, ciphertextAES128.ref);
+      final proofStrAES128  = HEX.encode(proofAES128.r0.asTypedList(proofAES128.r1));
+      prover.Free(proofAES128.r0);
+      calloc.free(keyAES128.ref.data);
+      calloc.free(keyAES128);
+      calloc.free(nonceAES128.ref.data);
+      calloc.free(nonceAES128);
+      calloc.free(plaintextAES128.ref.data);
+      calloc.free(plaintextAES128);
+      calloc.free(ciphertextAES128.ref.data);
+      calloc.free(ciphertextAES128);
+      calloc.free(counterAES128.ref.data);
+      calloc.free(counterAES128);
+      _proof = '$_proof\n\nAES128: $proofStrAES128';
+
+      final keyAES256 = hexToGoSlice('F6D66D6BD52D59BB0796365879EFF886C66DD51A5B6A99744B50590C87A23884');
+      final nonceAES256  = hexToGoSlice('00FAAC24C1585EF15A43D875');
+      final plaintextAES256  =  hexToGoSlice('000102030405060708090A0B0C0D0E0F');
+      final ciphertextAES256  = hexToGoSlice('F05E231B3894612C49EE000B804EB2A9');
+      final counterAES256 = hexToGoSlice('00000001');
+
+      final proofAES256  = prover.ProveAES256(counterAES256.ref, keyAES256.ref, nonceAES256.ref, plaintextAES256.ref, ciphertextAES256.ref);
+      final proofStrAES256  = HEX.encode(proofAES256.r0.asTypedList(proofAES256.r1));
+      prover.Free(proofAES256.r0);
+      calloc.free(keyAES256.ref.data);
+      calloc.free(keyAES256);
+      calloc.free(nonceAES256.ref.data);
+      calloc.free(nonceAES256);
+      calloc.free(plaintextAES256.ref.data);
+      calloc.free(plaintextAES256);
+      calloc.free(ciphertextAES256.ref.data);
+      calloc.free(ciphertextAES256);
+      calloc.free(counterAES256.ref.data);
+      calloc.free(counterAES256);
+      _proof = '$_proof\n\nAES256: $proofStrAES256';
     });
   }
 

@@ -55,7 +55,9 @@ func main() {
 	// generateGroth16()
 	// trySerialize()
 
-	generateAES()
+	generateChaCha()
+	generateAES128()
+	generateAES256()
 }
 
 // var r1css = groth16.NewCS(ecc.BN254)
@@ -357,7 +359,48 @@ func trySerialize() {
 	fmt.Println(r1css.GetNbConstraints())
 }*/
 
-func generateAES() {
+func generateChaCha() {
+	curve := ecc.BN254.ScalarField()
+
+	witness := chacha.ChaChaCircuit{
+		Key:     make([]uints.U32, 8),
+		Counter: uints.U32{},
+		Nonce:   make([]uints.U32, 3),
+		In:      make([]uints.U32, 16),
+		Out:     make([]uints.U32, 16),
+	}
+
+	t := time.Now()
+	r1css, err := frontend.Compile(curve, r1cs.NewBuilder, &witness)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("compile took ", time.Since(t))
+
+	fmt.Printf("Blocks: %d, constraints: %d\n", chacha.Blocks, r1css.GetNbConstraints())
+
+	os.Remove("f:\\r1cs")
+	os.Remove("f:\\pk")
+	os.Remove("f:\\vk")
+	f, err := os.OpenFile("f:\\r1cs", os.O_RDWR|os.O_CREATE, 0777)
+	r1css.WriteTo(f)
+	f.Close()
+
+	pk1, vk1, err := groth16.Setup(r1css)
+	if err != nil {
+		panic(err)
+	}
+
+	f2, err := os.OpenFile("f:\\pk", os.O_RDWR|os.O_CREATE, 0777)
+	pk1.WriteTo(f2)
+	f2.Close()
+
+	f3, err := os.OpenFile("f:\\vk", os.O_RDWR|os.O_CREATE, 0777)
+	vk1.WriteTo(f3)
+	f3.Close()
+}
+
+func generateAES128() {
 	curve := ecc.BN254.ScalarField()
 
 	witness := aes.AES128Wrapper{
@@ -367,7 +410,7 @@ func generateAES() {
 	}
 
 	t := time.Now()
-	r1css, err := frontend.Compile(curve, r1cs.NewBuilder, &witness, frontend.WithCompressThreshold(10), frontend.WithCapacity(500000))
+	r1css, err := frontend.Compile(curve, r1cs.NewBuilder, &witness)
 	if err != nil {
 		panic(err)
 	}
@@ -375,10 +418,10 @@ func generateAES() {
 
 	fmt.Printf("Blocks: %d, constraints: %d\n", chacha.Blocks, r1css.GetNbConstraints())
 
-	os.Remove("f:\\r1cs.aes")
-	os.Remove("f:\\pk.aes")
-	os.Remove("f:\\vk.aes")
-	f, err := os.OpenFile("f:\\r1cs.aes", os.O_RDWR|os.O_CREATE, 0777)
+	os.Remove("f:\\r1cs.aes128")
+	os.Remove("f:\\pk.aes128")
+	os.Remove("f:\\vk.aes128")
+	f, err := os.OpenFile("f:\\r1cs.aes128", os.O_RDWR|os.O_CREATE, 0777)
 	r1css.WriteTo(f)
 	f.Close()
 
@@ -387,11 +430,50 @@ func generateAES() {
 		panic(err)
 	}
 
-	f2, err := os.OpenFile("f:\\pk.aes", os.O_RDWR|os.O_CREATE, 0777)
+	f2, err := os.OpenFile("f:\\pk.aes128", os.O_RDWR|os.O_CREATE, 0777)
 	pk1.WriteTo(f2)
 	f2.Close()
 
-	f3, err := os.OpenFile("f:\\vk.aes", os.O_RDWR|os.O_CREATE, 0777)
+	f3, err := os.OpenFile("f:\\vk.aes128", os.O_RDWR|os.O_CREATE, 0777)
+	vk1.WriteTo(f3)
+	f3.Close()
+}
+
+func generateAES256() {
+	curve := ecc.BN254.ScalarField()
+
+	witness := aes.AES256Wrapper{
+		Key:        [32]frontend.Variable{},
+		Plaintext:  [16]frontend.Variable{},
+		Ciphertext: [16]frontend.Variable{},
+	}
+
+	t := time.Now()
+	r1css, err := frontend.Compile(curve, r1cs.NewBuilder, &witness)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("compile took ", time.Since(t))
+
+	fmt.Printf("Blocks: %d, constraints: %d\n", chacha.Blocks, r1css.GetNbConstraints())
+
+	os.Remove("f:\\r1cs.aes256")
+	os.Remove("f:\\pk.aes256")
+	os.Remove("f:\\vk.aes256")
+	f, err := os.OpenFile("f:\\r1cs.aes256", os.O_RDWR|os.O_CREATE, 0777)
+	r1css.WriteTo(f)
+	f.Close()
+
+	pk1, vk1, err := groth16.Setup(r1css)
+	if err != nil {
+		panic(err)
+	}
+
+	f2, err := os.OpenFile("f:\\pk.aes256", os.O_RDWR|os.O_CREATE, 0777)
+	pk1.WriteTo(f2)
+	f2.Close()
+
+	f3, err := os.OpenFile("f:\\vk.aes256", os.O_RDWR|os.O_CREATE, 0777)
 	vk1.WriteTo(f3)
 	f3.Close()
 }

@@ -11,7 +11,7 @@ const AES_256_ROUNDS = 14
 const NB = 4 // columns
 const AES_256_KS_WORDS = NB * (AES_256_ROUNDS + 1)
 
-const BLOCKS = 2
+const BLOCKS = 1
 
 type AES256Wrapper struct {
 	Key        [AES_256_KEY_SIZE_BYTES]frontend.Variable

@@ -30,8 +30,8 @@ func TestAES128(t *testing.T) {
 	assert := test.NewAssert(t)
 
 	key := "7E24067817FAE0D743D6CE1F32539163"
-	plaintext := "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F"
-	ciphertext := "5104A106168A72D9790D41EE8EDAD388EB2E1EFC46DA57C8FCE630DF9141BE28"
+	plaintext := "000102030405060708090A0B0C0D0E0F"  // +"101112131415161718191A1B1C1D1E1F"
+	ciphertext := "5104A106168A72D9790D41EE8EDAD388" // +"EB2E1EFC46DA57C8FCE630DF9141BE28"
 	Nonce := "006CB6DBC0543B59DA48D90B"
 	Counter := 1
 
@@ -45,8 +45,8 @@ func TestAES128(t *testing.T) {
 		Key:        [16]frontend.Variable{},
 		Counter:    Counter,
 		Nonce:      [12]frontend.Variable{},
-		Plaintext:  [32]frontend.Variable{},
-		Ciphertext: [32]frontend.Variable{},
+		Plaintext:  [16]frontend.Variable{},
+		Ciphertext: [16]frontend.Variable{},
 	}
 
 	// assign values here because required to use make in assignment
