@@ -32,6 +32,15 @@ func Free(pointer unsafe.Pointer) {
 	C.free(pointer)
 }
 
+/*//go:embed r1cs
+var r1cssChaChaEmbedded []byte
+
+//go:embed r1cs.aes128
+var r1cssAES128Embedded []byte
+
+//go:embed r1cs.aes256
+var r1cssAES256Embedded []byte*/
+
 //go:embed pk
 var pkChaChaEmbedded []byte
 var r1cssChaCha constraint.ConstraintSystem
@@ -47,22 +56,48 @@ var pkAES256Embedded []byte
 var r1cssAES256 constraint.ConstraintSystem
 var pkAES256 groth16.ProvingKey
 
-var initDone sync.WaitGroup
+var initChaCha sync.WaitGroup
+var initAES128 sync.WaitGroup
+var initAES256 sync.WaitGroup
 
 func init() {
-	initDone.Add(1)
+	initChaCha.Add(1)
+	initAES128.Add(1)
+	initAES256.Add(1)
 }
 
 var initFunc = sync.OnceFunc(func() {
-	defer initDone.Done()
+
 	if len(pkChaChaEmbedded) == 0 ||
 		len(pkAES128Embedded) == 0 ||
 		len(pkAES256Embedded) == 0 {
 		panic("could not load circuit and proving key")
 	}
 
-	fmt.Println("compiling ChaCha")
+	fmt.Println("loading ChaCha")
 	var err error
+
+	/*r1cssChaCha = groth16.NewCS(ecc.BN254)
+	_, err = r1cssChaCha.ReadFrom(bytes.NewBuffer(r1cssChaChaEmbedded))
+	if err != nil {
+		panic(err)
+	}
+
+	PrintMemUsage()
+
+	r1cssAES128 = groth16.NewCS(ecc.BN254)
+	_, err = r1cssAES128.ReadFrom(bytes.NewBuffer(r1cssAES128Embedded))
+	if err != nil {
+		panic(err)
+	}
+	PrintMemUsage()
+	r1cssAES256 = groth16.NewCS(ecc.BN254)
+	_, err = r1cssAES256.ReadFrom(bytes.NewBuffer(r1cssAES256Embedded))
+	if err != nil {
+		panic(err)
+	}
+
+	PrintMemUsage()*/
 	curve := ecc.BN254.ScalarField()
 
 	witnessChaCha := chacha.ChaChaCircuit{
@@ -72,6 +107,7 @@ var initFunc = sync.OnceFunc(func() {
 		In:      make([]uints.U32, 16),
 		Out:     make([]uints.U32, 16),
 	}
+
 	r1cssChaCha, err = frontend.Compile(curve, r1cs.NewBuilder, &witnessChaCha, frontend.WithCapacity(80000))
 
 	if err != nil {
@@ -83,6 +119,7 @@ var initFunc = sync.OnceFunc(func() {
 		panic(err)
 	}
 
+	initChaCha.Done()
 	fmt.Println("compiling AES128")
 	witnessAES128 := aes.AES128Wrapper{
 		Key:        [16]frontend.Variable{},
@@ -94,12 +131,13 @@ var initFunc = sync.OnceFunc(func() {
 	if err != nil {
 		panic(err)
 	}
+
 	pkAES128 = groth16.NewProvingKey(ecc.BN254)
 	_, err = pkAES128.ReadFrom(bytes.NewBuffer(pkAES128Embedded))
 	if err != nil {
 		panic(err)
 	}
-
+	initAES128.Done()
 	fmt.Println("compiling AES256")
 	witnessAES256 := aes.AES256Wrapper{
 		Key:        [32]frontend.Variable{},
@@ -115,7 +153,9 @@ var initFunc = sync.OnceFunc(func() {
 	if err != nil {
 		panic(err)
 	}
+	initAES256.Done()
 	fmt.Println("Done compiling")
+	// PrintMemUsage()
 })
 
 //export Init
@@ -137,7 +177,7 @@ func (c *WitnessChaCha) Define(api frontend.API) error {
 
 //export ProveChaCha
 func ProveChaCha(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
-	initDone.Wait()
+	initChaCha.Wait()
 	uplaintext := utils.BytesToUint32BE(plaintext)
 	uciphertext := utils.BytesToUint32BE(ciphertext)
 	ukey := utils.BytesToUint32LE(key)
@@ -185,7 +225,7 @@ func (c *WitnessAES128) Define(api frontend.API) error {
 
 //export ProveAES128
 func ProveAES128(counter, key, nonce, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
-	initDone.Wait()
+	initAES128.Wait()
 	if len(counter) != 4 {
 		log.Panicf("counter length must be 4: %d", len(counter))
 	}
@@ -254,7 +294,7 @@ func (c *WitnessAES256) Define(api frontend.API) error {
 
 //export ProveAES256
 func ProveAES256(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
-	initDone.Wait()
+	initAES256.Wait()
 	witness := WitnessAES256{
 		Key:        [32]frontend.Variable{},
 		Counter:    binary.BigEndian.Uint32(cnt),
@@ -290,5 +330,24 @@ func ProveAES256(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []b
 		panic(err)
 	}
 	res := buf.Bytes()
+	/*os.Remove("heap.prof")
+	f, _ := os.OpenFile("heap.prof", os.O_CREATE|os.O_RDWR, 0777)
+	defer f.Close()
+	pprof.WriteHeapProfile(f)*/
+	// PrintMemUsage()
 	return C.CBytes(res), len(res)
 }
+
+/*func PrintMemUsage() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
+	fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
+	fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
+	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
+	fmt.Printf("\tNumGC = %v\n", m.NumGC)
+}
+
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
+}*/
