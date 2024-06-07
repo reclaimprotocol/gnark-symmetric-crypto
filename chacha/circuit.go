@@ -8,11 +8,11 @@ import (
 const Blocks = 1
 
 type ChaChaCircuit struct {
-	Key     []uints.U32
+	Key     [8]uints.U32
 	Counter uints.U32 `gnark:",public"`
-	Nonce   []uints.U32
-	In      []uints.U32 `gnark:",public"`
-	Out     []uints.U32 `gnark:",public"`
+	Nonce   [3]uints.U32
+	In      [16 * Blocks]uints.U32 `gnark:",public"`
+	Out     [16 * Blocks]uints.U32 `gnark:",public"`
 }
 
 func (c *ChaChaCircuit) Define(api frontend.API) error {

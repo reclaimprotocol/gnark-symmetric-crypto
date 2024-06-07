@@ -14,9 +14,8 @@ import (
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
-	"github.com/consensys/gnark/std/math/uints"
 	"github.com/reclaimprotocol/gnark-chacha20/aes"
-	"github.com/reclaimprotocol/gnark-chacha20/chacha"
+	chacha_bits "github.com/reclaimprotocol/gnark-chacha20/chacha-bits"
 	"github.com/reclaimprotocol/gnark-chacha20/utils"
 )
 
@@ -100,13 +99,7 @@ var initFunc = sync.OnceFunc(func() {
 	PrintMemUsage()*/
 	curve := ecc.BN254.ScalarField()
 
-	witnessChaCha := chacha.ChaChaCircuit{
-		Counter: uints.NewU32(0),
-		Key:     make([]uints.U32, 8),
-		Nonce:   make([]uints.U32, 3),
-		In:      make([]uints.U32, 16),
-		Out:     make([]uints.U32, 16),
-	}
+	witnessChaCha := chacha_bits.ChaChaCircuit{}
 
 	r1cssChaCha, err = frontend.Compile(curve, r1cs.NewBuilder, &witnessChaCha, frontend.WithCapacity(80000))
 
@@ -163,7 +156,7 @@ func Init() {
 	go initFunc()
 }
 
-type WitnessChaCha struct {
+/*type WitnessChaCha struct {
 	Key     []uints.U32
 	Counter uints.U32 `gnark:",public"`
 	Nonce   []uints.U32
@@ -209,25 +202,44 @@ func ProveChaCha(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []b
 	}
 	res := buf.Bytes()
 	return C.CBytes(res), len(res)
-}
+}*/
 
-type WitnessAES128 struct {
-	Key        [16]frontend.Variable
-	Nonce      [12]frontend.Variable
-	Counter    frontend.Variable `gnark:",public"`
-	Plaintext  [16]frontend.Variable
-	Ciphertext [16]frontend.Variable `gnark:",public"`
-}
+//export ProveChaCha
+func ProveChaCha(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
+	initChaCha.Wait()
+	uplaintext := utils.BytesToUint32BERaw(plaintext)
+	uciphertext := utils.BytesToUint32BERaw(ciphertext)
+	ukey := utils.BytesToUint32LERaw(key)
+	unonce := utils.BytesToUint32LERaw(nonce)
 
-func (c *WitnessAES128) Define(api frontend.API) error {
-	return nil
+	witness := chacha_bits.ChaChaCircuit{}
+	copy(witness.Key[:], ukey)
+	copy(witness.Nonce[:], unonce)
+	witness.Counter = binary.BigEndian.Uint32(cnt)
+	copy(witness.In[:], uplaintext)
+	copy(witness.Out[:], uciphertext)
+	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
+	if err != nil {
+		panic(err)
+	}
+	gProof, err := groth16.Prove(r1cssChaCha, pkChaCha, wtns)
+	if err != nil {
+		panic(err)
+	}
+	buf := &bytes.Buffer{}
+	_, err = gProof.WriteTo(buf)
+	if err != nil {
+		panic(err)
+	}
+	res := buf.Bytes()
+	return C.CBytes(res), len(res)
 }
 
 //export ProveAES128
-func ProveAES128(counter, key, nonce, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
+func ProveAES128(cnt, key, nonce, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
 	initAES128.Wait()
-	if len(counter) != 4 {
-		log.Panicf("counter length must be 4: %d", len(counter))
+	if len(cnt) != 4 {
+		log.Panicf("counter length must be 4: %d", len(cnt))
 	}
 	if len(key) != 16 {
 		log.Panicf("key length must be 16: %d", len(key))
@@ -242,12 +254,8 @@ func ProveAES128(counter, key, nonce, plaintext, ciphertext []byte) (unsafe.Poin
 		log.Panicf("ciphertext length must be 16: %d", len(ciphertext))
 	}
 
-	witness := WitnessAES128{
-		Key:        [16]frontend.Variable{},
-		Counter:    binary.BigEndian.Uint32(counter),
-		Nonce:      [12]frontend.Variable{},
-		Plaintext:  [16]frontend.Variable{},
-		Ciphertext: [16]frontend.Variable{},
+	witness := aes.AES128Wrapper{
+		Counter: binary.BigEndian.Uint32(cnt),
 	}
 
 	for i := 0; i < len(key); i++ {
@@ -280,27 +288,28 @@ func ProveAES128(counter, key, nonce, plaintext, ciphertext []byte) (unsafe.Poin
 	return C.CBytes(res), len(res)
 }
 
-type WitnessAES256 struct {
-	Key        [32]frontend.Variable
-	Nonce      [12]frontend.Variable
-	Counter    frontend.Variable `gnark:",public"`
-	Plaintext  [16]frontend.Variable
-	Ciphertext [16]frontend.Variable `gnark:",public"`
-}
-
-func (c *WitnessAES256) Define(api frontend.API) error {
-	return nil
-}
-
 //export ProveAES256
 func ProveAES256(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
 	initAES256.Wait()
-	witness := WitnessAES256{
-		Key:        [32]frontend.Variable{},
-		Counter:    binary.BigEndian.Uint32(cnt),
-		Nonce:      [12]frontend.Variable{},
-		Plaintext:  [16]frontend.Variable{},
-		Ciphertext: [16]frontend.Variable{},
+
+	if len(cnt) != 4 {
+		log.Panicf("counter length must be 4: %d", len(cnt))
+	}
+	if len(key) != 32 {
+		log.Panicf("key length must be 32: %d", len(key))
+	}
+	if len(nonce) != 12 {
+		log.Panicf("nonce length must be 12: %d", len(nonce))
+	}
+	if len(plaintext) != 16 {
+		log.Panicf("plaintext length must be 16: %d", len(plaintext))
+	}
+	if len(ciphertext) != 16 {
+		log.Panicf("ciphertext length must be 16: %d", len(ciphertext))
+	}
+
+	witness := aes.AES256Wrapper{
+		Counter: binary.BigEndian.Uint32(cnt),
 	}
 	for i := 0; i < len(key); i++ {
 		witness.Key[i] = key[i]
