@@ -17,7 +17,6 @@ type ChaChaCircuit struct {
 func (c *ChaChaCircuit) Define(api frontend.API) error {
 
 	var state [16]frontend.Variable
-	one := 1
 	counter := c.Counter
 
 	for b := 0; b < Blocks; b++ {
@@ -50,7 +49,7 @@ func (c *ChaChaCircuit) Define(api frontend.API) error {
 		}
 
 		// increment counter for next block
-		counter = add32(api, counter, one)
+		counter = add32(api, counter, 1)
 	}
 
 	return nil
