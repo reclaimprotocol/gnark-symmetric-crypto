@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -15,7 +16,7 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/reclaimprotocol/gnark-chacha20/aes"
-	chacha_bits "github.com/reclaimprotocol/gnark-chacha20/chacha-bits"
+	"github.com/reclaimprotocol/gnark-chacha20/chachaV3"
 	"github.com/reclaimprotocol/gnark-chacha20/utils"
 )
 
@@ -44,6 +45,7 @@ var r1cssAES256Embedded []byte*/
 var pkChaChaEmbedded []byte
 var r1cssChaCha constraint.ConstraintSystem
 var pkChaCha groth16.ProvingKey
+var chachaDone bool
 
 //go:embed pk.aes128
 var pkAES128Embedded []byte
@@ -99,9 +101,9 @@ var initFunc = sync.OnceFunc(func() {
 	PrintMemUsage()*/
 	curve := ecc.BN254.ScalarField()
 
-	witnessChaCha := chacha_bits.ChaChaCircuit{}
+	witnessChaCha := chachaV3.ChaChaCircuit{}
 
-	r1cssChaCha, err = frontend.Compile(curve, r1cs.NewBuilder, &witnessChaCha, frontend.WithCapacity(80000))
+	r1cssChaCha, err = frontend.Compile(curve, r1cs.NewBuilder, &witnessChaCha, frontend.WithCapacity(30000))
 
 	if err != nil {
 		panic(err)
@@ -113,7 +115,8 @@ var initFunc = sync.OnceFunc(func() {
 	}
 
 	initChaCha.Done()
-	fmt.Println("compiling AES128")
+	chachaDone = true
+	/*fmt.Println("compiling AES128")
 	witnessAES128 := aes.AES128Wrapper{
 		Key:        [16]frontend.Variable{},
 		Plaintext:  [16]frontend.Variable{},
@@ -146,7 +149,7 @@ var initFunc = sync.OnceFunc(func() {
 	if err != nil {
 		panic(err)
 	}
-	initAES256.Done()
+	initAES256.Done()*/
 	fmt.Println("Done compiling")
 	// PrintMemUsage()
 })
@@ -154,6 +157,11 @@ var initFunc = sync.OnceFunc(func() {
 //export Init
 func Init() {
 	go initFunc()
+}
+
+//export InitComplete
+func InitComplete() bool {
+	return chachaDone
 }
 
 /*type WitnessChaCha struct {
@@ -212,10 +220,42 @@ func ProveChaCha(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []b
 	ukey := utils.BytesToUint32LERaw(key)
 	unonce := utils.BytesToUint32LERaw(nonce)
 
-	witness := chacha_bits.ChaChaCircuit{}
+	witness := chachaV3.ChaChaCircuit{}
+	copy(witness.Key[:], utils.UintsToBits(ukey))
+	copy(witness.Nonce[:], utils.UintsToBits(unonce))
+	witness.Counter = utils.Uint32ToBits(binary.BigEndian.Uint32(cnt))
+	copy(witness.In[:], utils.UintsToBits(uplaintext))
+	copy(witness.Out[:], utils.UintsToBits(uciphertext))
+
+	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
+	if err != nil {
+		panic(err)
+	}
+	gProof, err := groth16.Prove(r1cssChaCha, pkChaCha, wtns)
+	if err != nil {
+		panic(err)
+	}
+	buf := &bytes.Buffer{}
+	_, err = gProof.WriteTo(buf)
+	if err != nil {
+		panic(err)
+	}
+	res := buf.Bytes()
+	return C.CBytes(res), len(res)
+}
+
+/*//export ProveChaCha
+func ProveChaCha(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
+	initChaCha.Wait()
+	uplaintext := utils.BytesToUint32BE(plaintext)
+	uciphertext := utils.BytesToUint32BE(ciphertext)
+	ukey := utils.BytesToUint32LE(key)
+	unonce := utils.BytesToUint32LE(nonce)
+
+	witness := chacha.ChaChaCircuit{}
 	copy(witness.Key[:], ukey)
 	copy(witness.Nonce[:], unonce)
-	witness.Counter = binary.BigEndian.Uint32(cnt)
+	witness.Counter = uints.NewU32(binary.BigEndian.Uint32(cnt))
 	copy(witness.In[:], uplaintext)
 	copy(witness.Out[:], uciphertext)
 	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
@@ -233,7 +273,7 @@ func ProveChaCha(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []b
 	}
 	res := buf.Bytes()
 	return C.CBytes(res), len(res)
-}
+}*/
 
 //export ProveAES128
 func ProveAES128(cnt, key, nonce, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
@@ -343,11 +383,12 @@ func ProveAES256(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []b
 	f, _ := os.OpenFile("heap.prof", os.O_CREATE|os.O_RDWR, 0777)
 	defer f.Close()
 	pprof.WriteHeapProfile(f)*/
-	// PrintMemUsage()
+	PrintMemUsage()
+
 	return C.CBytes(res), len(res)
 }
 
-/*func PrintMemUsage() {
+func PrintMemUsage() {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
@@ -359,4 +400,4 @@ func ProveAES256(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []b
 
 func bToMb(b uint64) uint64 {
 	return b / 1024 / 1024
-}*/
+}

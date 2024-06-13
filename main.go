@@ -16,7 +16,7 @@ import (
 	"github.com/consensys/gnark/std/math/uints"
 	"github.com/reclaimprotocol/gnark-chacha20/aes"
 	"github.com/reclaimprotocol/gnark-chacha20/chacha"
-	chacha_bits "github.com/reclaimprotocol/gnark-chacha20/chacha-bits"
+	"github.com/reclaimprotocol/gnark-chacha20/chachaV3"
 	"github.com/reclaimprotocol/gnark-chacha20/utils"
 
 	"golang.org/x/crypto/chacha20"
@@ -56,10 +56,10 @@ func main() {
 	// generateGroth16()
 	// trySerialize()
 
-	generateChaCha()
-	generateChaChaBits()
-	generateAES128()
-	generateAES256()
+	// generateChaCha()
+	generateChaChaV3()
+	// generateAES128()
+	// generateAES256()
 }
 
 // var r1css = groth16.NewCS(ecc.BN254)
@@ -307,10 +307,10 @@ func generateChaCha() {
 	f3.Close()
 }
 
-func generateChaChaBits() {
+func generateChaChaV3() {
 	curve := ecc.BN254.ScalarField()
 
-	witness := chacha_bits.ChaChaCircuit{}
+	witness := chachaV3.ChaChaCircuit{}
 
 	t := time.Now()
 	r1css, err := frontend.Compile(curve, r1cs.NewBuilder, &witness)
@@ -319,7 +319,7 @@ func generateChaChaBits() {
 	}
 	fmt.Println("compile took ", time.Since(t))
 
-	fmt.Printf("Blocks: %d, constraints: %d\n", chacha.Blocks, r1css.GetNbConstraints())
+	fmt.Printf("Blocks: %d, constraints: %d\n", chachaV3.Blocks, r1css.GetNbConstraints())
 
 	os.Remove("f:\\r1cs.bits")
 	os.Remove("f:\\pk.bits")
@@ -358,7 +358,7 @@ func generateAES128() {
 	}
 	fmt.Println("compile took ", time.Since(t))
 
-	fmt.Printf("Blocks: %d, constraints: %d\n", chacha.Blocks, r1css.GetNbConstraints())
+	fmt.Printf("constraints: %d\n", r1css.GetNbConstraints())
 
 	os.Remove("f:\\r1cs.aes128")
 	os.Remove("f:\\pk.aes128")
@@ -397,7 +397,7 @@ func generateAES256() {
 	}
 	fmt.Println("compile took ", time.Since(t))
 
-	fmt.Printf("Blocks: %d, constraints: %d\n", chacha.Blocks, r1css.GetNbConstraints())
+	fmt.Printf("constraints: %d\n", r1css.GetNbConstraints())
 
 	os.Remove("f:\\r1cs.aes256")
 	os.Remove("f:\\pk.aes256")

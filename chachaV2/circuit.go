@@ -1,10 +1,10 @@
-package chacha_bits
+package chachaV2
 
 import (
 	"github.com/consensys/gnark/frontend"
 )
 
-const Blocks = 1
+const Blocks = 16
 
 type ChaChaCircuit struct {
 	Key     [8]frontend.Variable

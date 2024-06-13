@@ -1,6 +1,7 @@
-package chacha_bits
+package chachaV3
 
 import (
+	"crypto/rand"
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -11,18 +12,41 @@ import (
 )
 
 type qrBlock struct {
-	In  [16]frontend.Variable
-	Out [16]frontend.Variable `gnark:",public"`
+	In  [16][BITS_PER_WORD]frontend.Variable
+	Out [16][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 }
 
 func (c *qrBlock) Define(api frontend.API) error {
 
-	var workingState [16]frontend.Variable
-	copy(workingState[:], c.In[:])
+	a0 := api.ToBinary(0x11111111)
+	a1 := api.ToBinary(0x01020304)
+	a2 := api.ToBinary(0x9b8d6f43)
+	a3 := api.ToBinary(0x01234567)
 
-	QR(api, &workingState, 0, 1, 2, 3)
+	b0 := api.ToBinary(0xea2a92f4)
+	b1 := api.ToBinary(0xcb1cf8ce)
+	b2 := api.ToBinary(0x4581472e)
+	b3 := api.ToBinary(0x5881c4bb)
+
+	for i := 0; i < BITS_PER_WORD; i++ {
+		c.In[0][i] = a0[i]
+		c.In[1][i] = a1[i]
+		c.In[2][i] = a2[i]
+		c.In[3][i] = a3[i]
+
+		c.Out[0][i] = b0[i]
+		c.Out[1][i] = b1[i]
+		c.Out[2][i] = b2[i]
+		c.Out[3][i] = b3[i]
+	}
+
+	QR(api, &c.In, 0, 1, 2, 3)
 	for i := range c.Out {
-		api.AssertIsEqual(c.Out[i], workingState[i])
+		a := api.FromBinary(c.In[i][:]...)
+		b := api.FromBinary(c.Out[i][:]...)
+		api.Println(a, b)
+		api.AssertIsEqual(a, b)
+
 	}
 	return nil
 }
@@ -30,19 +54,9 @@ func (c *qrBlock) Define(api frontend.API) error {
 func TestQR(t *testing.T) {
 	assert := test.NewAssert(t)
 	witness := qrBlock{}
-	witness.In[0] = 0x11111111
-	witness.In[1] = 0x01020304
-	witness.In[2] = 0x9b8d6f43
-	witness.In[3] = 0x01234567
-
-	witness.Out[0] = 0xea2a92f4
-	witness.Out[1] = 0xcb1cf8ce
-	witness.Out[2] = 0x4581472e
-	witness.Out[3] = 0x5881c4bb
-
-	for i := 4; i < 16; i++ {
-		witness.In[i] = 0
-		witness.Out[i] = 0
+	for i := 0; i < 16; i++ {
+		witness.In[i] = [BITS_PER_WORD]frontend.Variable{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+		witness.Out[i] = [BITS_PER_WORD]frontend.Variable{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	}
 
 	err := test.IsSolved(&qrBlock{}, &witness, ecc.BN254.ScalarField())
@@ -53,20 +67,24 @@ func TestQR(t *testing.T) {
 }
 
 type roundCircuit struct {
-	In  [16]frontend.Variable
-	Out [16]frontend.Variable `gnark:",public"`
+	In  [16][BITS_PER_WORD]frontend.Variable
+	Out [16][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 }
 
 func (c *roundCircuit) Define(api frontend.API) error {
 
-	var workingState [16]frontend.Variable
+	var workingState [16][BITS_PER_WORD]frontend.Variable
 	copy(workingState[:], c.In[:])
 
 	Round(api, &workingState)
 	Serialize(api, &workingState)
 
 	for i := range c.Out {
-		api.AssertIsEqual(c.Out[i], workingState[i])
+
+		a := api.FromBinary(c.Out[i][:]...)
+		b := api.FromBinary(workingState[i][:]...)
+		api.Println(a, b)
+		api.AssertIsEqual(a, b)
 	}
 
 	return nil
@@ -88,8 +106,13 @@ func TestRound(t *testing.T) {
 		0xb5, 0x12, 0x9c, 0xd1, 0xde, 0x16, 0x4e, 0xb9, 0xcb, 0xd0, 0x83, 0xe8, 0xa2, 0x50, 0x3c, 0x4e})
 
 	witness := roundCircuit{}
-	copy(witness.In[:], in)
-	copy(witness.Out[:], out)
+
+	for i := 0; i < len(in); i++ {
+		a := utils.Uint32ToBits(in[i])
+		b := utils.Uint32ToBits(out[i])
+		copy(witness.In[i][:], a[:])
+		copy(witness.Out[i][:], b[:])
+	}
 	err := test.IsSolved(&roundCircuit{}, &witness, ecc.BN254.ScalarField())
 	assert.NoError(err)
 
@@ -108,7 +131,7 @@ func TestCipher(t *testing.T) {
 
 	counter := 1
 
-	bPt := []uint8{
+	/*bPt := []uint8{
 		0x4c, 0x61, 0x64, 0x69, 0x65, 0x73, 0x20, 0x61, 0x6e, 0x64, 0x20, 0x47, 0x65, 0x6e, 0x74, 0x6c,
 		0x65, 0x6d, 0x65, 0x6e, 0x20, 0x6f, 0x66, 0x20, 0x74, 0x68, 0x65, 0x20, 0x63, 0x6c, 0x61, 0x73,
 		0x73, 0x20, 0x6f, 0x66, 0x20, 0x27, 0x39, 0x39, 0x3a, 0x20, 0x49, 0x66, 0x20, 0x49, 0x20, 0x63,
@@ -128,26 +151,28 @@ func TestCipher(t *testing.T) {
 		0x52, 0xbc, 0x51, 0x4d, 0x16, 0xcc, 0xf8, 0x06, 0x81, 0x8c, 0xe9, 0x1a, 0xb7, 0x79, 0x37, 0x36,
 		0x5a, 0xf9, 0x0b, 0xbf, 0x74, 0xa3, 0x5b, 0xe6, 0xb4, 0x0b, 0x8e, 0xed, 0xf2, 0x78, 0x5e, 0x42,
 		0xbf, 0x02, 0x10, 0x6a, 0x16, 0x53, 0x3a, 0xc0, 0xe6, 0x9f, 0x9c, 0xaf, 0x5c, 0xff, 0xb0, 0x81,
-	}
+	}*/
 
-	plaintext := utils.BytesToUint32BERaw(bPt)
-
-	ciphertext := utils.BytesToUint32BERaw(bCt)
-
-	ct := make([]byte, 128)
+	bPt := make([]byte, Blocks*64)
+	rand.Read(bPt)
+	bCt := make([]byte, Blocks*64)
 
 	cipher, err := chacha20.NewUnauthenticatedCipher(bKey, bNonce)
 	assert.NoError(err)
 
 	cipher.SetCounter(1)
-	cipher.XORKeyStream(ct, bPt)
+	cipher.XORKeyStream(bCt, bPt)
+
+	plaintext := utils.BytesToUint32BERaw(bPt)
+	ciphertext := utils.BytesToUint32BERaw(bCt)
 
 	witness := ChaChaCircuit{}
-	copy(witness.Key[:], utils.BytesToUint32LERaw(bKey))
-	copy(witness.Nonce[:], utils.BytesToUint32LERaw(bNonce))
-	witness.Counter = counter
-	copy(witness.In[:], plaintext)
-	copy(witness.Out[:], ciphertext)
+
+	copy(witness.Key[:], utils.UintsToBits(utils.BytesToUint32LERaw(bKey)))
+	copy(witness.Nonce[:], utils.UintsToBits(utils.BytesToUint32LERaw(bNonce)))
+	witness.Counter = utils.Uint32ToBits(counter)
+	copy(witness.In[:], utils.UintsToBits(plaintext))
+	copy(witness.Out[:], utils.UintsToBits(ciphertext))
 
 	err = test.IsSolved(&ChaChaCircuit{}, &witness, ecc.BN254.ScalarField())
 	assert.NoError(err)

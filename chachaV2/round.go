@@ -1,4 +1,4 @@
-package chacha_bits
+package chachaV2
 
 import (
 	"github.com/consensys/gnark/frontend"
