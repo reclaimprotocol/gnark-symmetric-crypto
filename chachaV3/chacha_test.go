@@ -77,7 +77,7 @@ func (c *roundCircuit) Define(api frontend.API) error {
 	copy(workingState[:], c.In[:])
 
 	Round(api, &workingState)
-	Serialize(api, &workingState)
+	Serialize(&workingState)
 
 	for i := range c.Out {
 

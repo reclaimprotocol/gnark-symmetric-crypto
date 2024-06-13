@@ -22,18 +22,13 @@ func (c *ChaChaCircuit) Define(api frontend.API) error {
 	var one [BITS_PER_WORD]frontend.Variable
 	copy(one[:], api.ToBinary(1, 32))
 
-	a0 := api.ToBinary(0x61707865, 32)
-	a1 := api.ToBinary(0x3320646e, 32)
-	a2 := api.ToBinary(0x79622d32, 32)
-	a3 := api.ToBinary(0x6b206574, 32)
-
 	for b := 0; b < Blocks; b++ {
 		// Fill state. Start with constants
 
-		copy(state[0][:], a0)
-		copy(state[1][:], a1)
-		copy(state[2][:], a2)
-		copy(state[3][:], a3)
+		copy(state[0][:], api.ToBinary(0x61707865, 32))
+		copy(state[1][:], api.ToBinary(0x3320646e, 32))
+		copy(state[2][:], api.ToBinary(0x79622d32, 32))
+		copy(state[3][:], api.ToBinary(0x6b206574, 32))
 
 		// set key
 		copy(state[4:], c.Key[:])
@@ -44,7 +39,7 @@ func (c *ChaChaCircuit) Define(api frontend.API) error {
 		// modify state with round function
 		Round(api, &state)
 		// produce keystream from state
-		Serialize(api, &state)
+		Serialize(&state)
 
 		// xor keystream with input
 		var ciphertext [16][BITS_PER_WORD]frontend.Variable
@@ -59,7 +54,7 @@ func (c *ChaChaCircuit) Define(api frontend.API) error {
 			}
 		}
 		// increment counter for next block
-		add32(api, &counter, &one)
+		// add32(api, &counter, &one)
 	}
 
 	return nil
