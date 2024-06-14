@@ -2,6 +2,7 @@ package chachaV3
 
 import (
 	"github.com/consensys/gnark/frontend"
+	"github.com/reclaimprotocol/gnark-chacha20/utils"
 )
 
 const Blocks = 1
@@ -22,13 +23,17 @@ func (c *ChaChaCircuit) Define(api frontend.API) error {
 	var one [BITS_PER_WORD]frontend.Variable
 	copy(one[:], api.ToBinary(1, 32))
 
+	c1 := utils.Uint32ToBits(0x61707865)
+	c2 := utils.Uint32ToBits(0x3320646e)
+	c3 := utils.Uint32ToBits(0x79622d32)
+	c4 := utils.Uint32ToBits(0x6b206574)
 	for b := 0; b < Blocks; b++ {
 		// Fill state. Start with constants
 
-		copy(state[0][:], api.ToBinary(0x61707865, 32))
-		copy(state[1][:], api.ToBinary(0x3320646e, 32))
-		copy(state[2][:], api.ToBinary(0x79622d32, 32))
-		copy(state[3][:], api.ToBinary(0x6b206574, 32))
+		copy(state[0][:], c1[:])
+		copy(state[1][:], c2[:])
+		copy(state[2][:], c3[:])
+		copy(state[3][:], c4[:])
 
 		// set key
 		copy(state[4:], c.Key[:])

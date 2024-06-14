@@ -103,7 +103,7 @@ var initFunc = sync.OnceFunc(func() {
 
 	witnessChaCha := chachaV3.ChaChaCircuit{}
 
-	r1cssChaCha, err = frontend.Compile(curve, r1cs.NewBuilder, &witnessChaCha, frontend.WithCapacity(30000))
+	r1cssChaCha, err = frontend.Compile(curve, r1cs.NewBuilder, &witnessChaCha, frontend.WithCapacity(25000))
 
 	if err != nil {
 		panic(err)

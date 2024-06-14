@@ -2,6 +2,7 @@ package chachaV3
 
 import (
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/math/bits"
 )
 
 const BITS_PER_WORD = 32
@@ -28,10 +29,10 @@ func QR(api frontend.API, state *[16][BITS_PER_WORD]frontend.Variable, i, j, k, 
 }
 
 func add32(api frontend.API, aBits, bBits *[BITS_PER_WORD]frontend.Variable) {
-	a := api.FromBinary(aBits[:]...)
-	b := api.FromBinary(bBits[:]...)
+	a := bits.FromBinary(api, aBits[:], bits.WithNbDigits(32))
+	b := bits.FromBinary(api, bBits[:], bits.WithNbDigits(32))
 	res := api.Add(a, b)
-	resBits := api.ToBinary(res, BITS_PER_WORD+1)
+	resBits := bits.ToBinary(api, res, bits.WithNbDigits(BITS_PER_WORD+1))
 	for i := 0; i < BITS_PER_WORD; i++ {
 		aBits[i] = resBits[i] // api.Mul(resBits[i], 1)
 	}
@@ -54,8 +55,8 @@ func xorRot32(api frontend.API, a, b *[BITS_PER_WORD]frontend.Variable, l int) {
 	}
 }
 
-func Round(api frontend.API, state *[16][32]frontend.Variable) {
-	var workingState [16][32]frontend.Variable
+func Round(api frontend.API, state *[16][BITS_PER_WORD]frontend.Variable) {
+	var workingState [16][BITS_PER_WORD]frontend.Variable
 	copy(workingState[:], state[:])
 	for i := 0; i < 10; i++ {
 		QR(api, &workingState, 0, 4, 8, 12)
@@ -79,7 +80,7 @@ func repackLSB(a *[BITS_PER_WORD]frontend.Variable) {
 	var res [BITS_PER_WORD]frontend.Variable
 	for i := 0; i < 4; i++ {
 		for j := 0; j < 8; j++ {
-			res[(3-i)*8+j] = a[i*8+j] // api.Mul(a[i*8+j], 1)
+			res[(3-i)*8+j] = a[i*8+j]
 		}
 	}
 

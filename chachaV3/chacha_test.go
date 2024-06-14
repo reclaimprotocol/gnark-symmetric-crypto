@@ -44,7 +44,6 @@ func (c *qrBlock) Define(api frontend.API) error {
 	for i := range c.Out {
 		a := api.FromBinary(c.In[i][:]...)
 		b := api.FromBinary(c.Out[i][:]...)
-		api.Println(a, b)
 		api.AssertIsEqual(a, b)
 
 	}
@@ -83,7 +82,6 @@ func (c *roundCircuit) Define(api frontend.API) error {
 
 		a := api.FromBinary(c.Out[i][:]...)
 		b := api.FromBinary(workingState[i][:]...)
-		api.Println(a, b)
 		api.AssertIsEqual(a, b)
 	}
 
