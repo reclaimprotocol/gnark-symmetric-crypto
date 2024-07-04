@@ -1,4 +1,4 @@
-module github.com/reclaimprotocol/gnark-chacha20
+module gnark-symmetric-crypto
 
 go 1.21
 

@@ -3,21 +3,22 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	aes2 "gnark-symmetric-crypto/circuits/aes"
+	"gnark-symmetric-crypto/circuits/chacha"
+	"gnark-symmetric-crypto/circuits/chachaV3"
 	"time"
 
 	// _ "embed"
 	"fmt"
 	"os"
 
+	"gnark-symmetric-crypto/utils"
+
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/std/math/uints"
-	"github.com/reclaimprotocol/gnark-chacha20/aes"
-	"github.com/reclaimprotocol/gnark-chacha20/chacha"
-	"github.com/reclaimprotocol/gnark-chacha20/chachaV3"
-	"github.com/reclaimprotocol/gnark-chacha20/utils"
 
 	"golang.org/x/crypto/chacha20"
 )
@@ -58,8 +59,8 @@ func main() {
 
 	// generateChaCha()
 	generateChaChaV3()
-	// generateAES128()
-	// generateAES256()
+	generateAES128()
+	generateAES256()
 }
 
 // var r1css = groth16.NewCS(ecc.BN254)
@@ -130,17 +131,17 @@ func generateGroth16() error {
 	res := buf.Bytes()
 	fmt.Printf("%0X\n", res)*/
 
-	/*f, err := os.Open("f:\\r1cs")
+	/*f, err := os.Open("circuit_files/r1cs")
 	r1css := groth16.NewCS(ecc.BN254)
 	r1css.ReadFrom(f)
 	f.Close()
 
-	f1, err := os.Open("f:\\pk")
+	f1, err := os.Open("circuit_files/pk")
 	pk := groth16.NewProvingKey(ecc.BN254)
 	pk.ReadFrom(f1)
 	f1.Close()*/
 
-	/*f2, err := os.Open("f:\\vk")
+	/*f2, err := os.Open("circuit_files/vk")
 	vk := groth16.NewVerifyingKey(ecc.BN254)
 	vk.ReadFrom(f2)
 	f2.Close()*/
@@ -196,10 +197,10 @@ func generateGroth16() error {
 
 	fmt.Printf("Blocks: %d, constraints: %d\n", chacha.Blocks, r1css.GetNbConstraints())
 
-	os.Remove("f:\\r1cs")
-	os.Remove("f:\\pk")
-	os.Remove("f:\\vk")
-	f, err := os.OpenFile("f:\\r1cs", os.O_RDWR|os.O_CREATE, 0777)
+	os.Remove("circuit_files/r1cs")
+	os.Remove("circuit_files/pk")
+	os.Remove("circuit_files/vk")
+	f, err := os.OpenFile("circuit_files/r1cs", os.O_RDWR|os.O_CREATE, 0777)
 	r1css.WriteTo(f)
 	f.Close()
 
@@ -208,16 +209,16 @@ func generateGroth16() error {
 		return err
 	}
 
-	f2, err := os.OpenFile("f:\\pk", os.O_RDWR|os.O_CREATE, 0777)
+	f2, err := os.OpenFile("circuit_files/pk", os.O_RDWR|os.O_CREATE, 0777)
 	pk1.WriteTo(f2)
 	f2.Close()
 
-	f3, err := os.OpenFile("f:\\vk", os.O_RDWR|os.O_CREATE, 0777)
+	f3, err := os.OpenFile("circuit_files/vk", os.O_RDWR|os.O_CREATE, 0777)
 	vk1.WriteTo(f3)
 	f3.Close()
 
 	r1css = groth16.NewCS(ecc.BN254)
-	f, err = os.OpenFile("f:\\r1cs", os.O_RDONLY, 0777)
+	f, err = os.OpenFile("circuit_files/r1cs", os.O_RDONLY, 0777)
 	_, err = r1css.ReadFrom(f)
 	if err != nil {
 		panic(err)
@@ -239,7 +240,7 @@ func generateGroth16() error {
 		panic(err)
 	}
 	fmt.Println("loading proving key")
-	fpk, _ := os.OpenFile("f:\\pk", os.O_RDONLY, 0777)
+	fpk, _ := os.OpenFile("circuit_files/pk", os.O_RDONLY, 0777)
 	pk := groth16.NewProvingKey(ecc.BN254)
 	pk.ReadFrom(fpk)
 	fpk.Close()
@@ -253,7 +254,7 @@ func generateGroth16() error {
 	}
 	res := buf.Bytes()
 	fmt.Printf("%0X\n", res)
-	/*f3, err := os.OpenFile("f:\\proof", os.O_RDWR|os.O_CREATE, 0777)
+	/*f3, err := os.OpenFile("circuit_files/proof", os.O_RDWR|os.O_CREATE, 0777)
 	proof.WriteTo(f3)
 	f3.Close()*/
 
@@ -263,7 +264,7 @@ func generateGroth16() error {
 	copy(witness.Out[:], ciphertext)
 
 	wp, err := frontend.NewWitness(&witness, curve, frontend.PublicOnly())
-	fvk, _ := os.OpenFile("f:\\vk", os.O_RDONLY, 0777)
+	fvk, _ := os.OpenFile("circuit_files/vk", os.O_RDONLY, 0777)
 	vk := groth16.NewVerifyingKey(ecc.BN254)
 	vk.ReadFrom(fvk)
 	fvk.Close()
@@ -286,10 +287,10 @@ func generateChaCha() {
 
 	fmt.Printf("Blocks: %d, constraints: %d\n", chacha.Blocks, r1css.GetNbConstraints())
 
-	os.Remove("f:\\r1cs")
-	os.Remove("f:\\pk")
-	os.Remove("f:\\vk")
-	f, err := os.OpenFile("f:\\r1cs", os.O_RDWR|os.O_CREATE, 0777)
+	os.Remove("circuit_files/r1cs")
+	os.Remove("circuit_files/pk")
+	os.Remove("circuit_files/vk")
+	f, err := os.OpenFile("circuit_files/r1cs", os.O_RDWR|os.O_CREATE, 0777)
 	r1css.WriteTo(f)
 	f.Close()
 
@@ -298,11 +299,11 @@ func generateChaCha() {
 		panic(err)
 	}
 
-	f2, err := os.OpenFile("f:\\pk", os.O_RDWR|os.O_CREATE, 0777)
+	f2, err := os.OpenFile("circuit_files/pk", os.O_RDWR|os.O_CREATE, 0777)
 	pk1.WriteTo(f2)
 	f2.Close()
 
-	f3, err := os.OpenFile("f:\\vk", os.O_RDWR|os.O_CREATE, 0777)
+	f3, err := os.OpenFile("circuit_files/vk", os.O_RDWR|os.O_CREATE, 0777)
 	vk1.WriteTo(f3)
 	f3.Close()
 }
@@ -321,10 +322,10 @@ func generateChaChaV3() {
 
 	fmt.Printf("Blocks: %d, constraints: %d\n", chachaV3.Blocks, r1css.GetNbConstraints())
 
-	os.Remove("f:\\r1cs.bits")
-	os.Remove("f:\\pk.bits")
-	os.Remove("f:\\vk.bits")
-	f, err := os.OpenFile("f:\\r1cs.bits", os.O_RDWR|os.O_CREATE, 0777)
+	os.Remove("circuit_files/r1cs.bits")
+	os.Remove("circuit_files/pk.bits")
+	os.Remove("circuit_files/vk.bits")
+	f, err := os.OpenFile("circuit_files/r1cs.bits", os.O_RDWR|os.O_CREATE, 0777)
 	r1css.WriteTo(f)
 	f.Close()
 
@@ -333,11 +334,11 @@ func generateChaChaV3() {
 		panic(err)
 	}
 
-	f2, err := os.OpenFile("f:\\pk.bits", os.O_RDWR|os.O_CREATE, 0777)
+	f2, err := os.OpenFile("circuit_files/pk.bits", os.O_RDWR|os.O_CREATE, 0777)
 	pk1.WriteTo(f2)
 	f2.Close()
 
-	f3, err := os.OpenFile("f:\\vk.bits", os.O_RDWR|os.O_CREATE, 0777)
+	f3, err := os.OpenFile("circuit_files/vk.bits", os.O_RDWR|os.O_CREATE, 0777)
 	vk1.WriteTo(f3)
 	f3.Close()
 }
@@ -345,7 +346,7 @@ func generateChaChaV3() {
 func generateAES128() {
 	curve := ecc.BN254.ScalarField()
 
-	witness := aes.AES128Wrapper{
+	witness := aes2.AES128Wrapper{
 		Key:        [16]frontend.Variable{},
 		Plaintext:  [16]frontend.Variable{},
 		Ciphertext: [16]frontend.Variable{},
@@ -360,10 +361,10 @@ func generateAES128() {
 
 	fmt.Printf("constraints: %d\n", r1css.GetNbConstraints())
 
-	os.Remove("f:\\r1cs.aes128")
-	os.Remove("f:\\pk.aes128")
-	os.Remove("f:\\vk.aes128")
-	f, err := os.OpenFile("f:\\r1cs.aes128", os.O_RDWR|os.O_CREATE, 0777)
+	os.Remove("circuit_files/r1cs.aes128")
+	os.Remove("circuit_files/pk.aes128")
+	os.Remove("circuit_files/vk.aes128")
+	f, err := os.OpenFile("circuit_files/r1cs.aes128", os.O_RDWR|os.O_CREATE, 0777)
 	r1css.WriteTo(f)
 	f.Close()
 
@@ -372,11 +373,11 @@ func generateAES128() {
 		panic(err)
 	}
 
-	f2, err := os.OpenFile("f:\\pk.aes128", os.O_RDWR|os.O_CREATE, 0777)
+	f2, err := os.OpenFile("circuit_files/pk.aes128", os.O_RDWR|os.O_CREATE, 0777)
 	pk1.WriteTo(f2)
 	f2.Close()
 
-	f3, err := os.OpenFile("f:\\vk.aes128", os.O_RDWR|os.O_CREATE, 0777)
+	f3, err := os.OpenFile("circuit_files/vk.aes128", os.O_RDWR|os.O_CREATE, 0777)
 	vk1.WriteTo(f3)
 	f3.Close()
 }
@@ -384,7 +385,7 @@ func generateAES128() {
 func generateAES256() {
 	curve := ecc.BN254.ScalarField()
 
-	witness := aes.AES256Wrapper{
+	witness := aes2.AES256Wrapper{
 		Key:        [32]frontend.Variable{},
 		Plaintext:  [16]frontend.Variable{},
 		Ciphertext: [16]frontend.Variable{},
@@ -399,10 +400,10 @@ func generateAES256() {
 
 	fmt.Printf("constraints: %d\n", r1css.GetNbConstraints())
 
-	os.Remove("f:\\r1cs.aes256")
-	os.Remove("f:\\pk.aes256")
-	os.Remove("f:\\vk.aes256")
-	f, err := os.OpenFile("f:\\r1cs.aes256", os.O_RDWR|os.O_CREATE, 0777)
+	os.Remove("circuit_files/r1cs.aes256")
+	os.Remove("circuit_files/pk.aes256")
+	os.Remove("circuit_files/vk.aes256")
+	f, err := os.OpenFile("circuit_files/r1cs.aes256", os.O_RDWR|os.O_CREATE, 0777)
 	r1css.WriteTo(f)
 	f.Close()
 
@@ -411,11 +412,11 @@ func generateAES256() {
 		panic(err)
 	}
 
-	f2, err := os.OpenFile("f:\\pk.aes256", os.O_RDWR|os.O_CREATE, 0777)
+	f2, err := os.OpenFile("circuit_files/pk.aes256", os.O_RDWR|os.O_CREATE, 0777)
 	pk1.WriteTo(f2)
 	f2.Close()
 
-	f3, err := os.OpenFile("f:\\vk.aes256", os.O_RDWR|os.O_CREATE, 0777)
+	f3, err := os.OpenFile("circuit_files/vk.aes256", os.O_RDWR|os.O_CREATE, 0777)
 	vk1.WriteTo(f3)
 	f3.Close()
 }
