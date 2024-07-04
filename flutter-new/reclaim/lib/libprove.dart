@@ -54,24 +54,22 @@ class NativeLibrary {
     GoSlice counter,
     GoSlice key,
     GoSlice nonce,
-    GoSlice plaintext,
-    GoSlice ciphertext,
+    GoSlice plaintext
   ) {
     return _ProveChaCha(
       counter,
       key,
       nonce,
-      plaintext,
-      ciphertext,
+      plaintext
     );
   }
 
   late final _ProvePtrChaCha = _lookup<
       ffi.NativeFunction<
           Prove_return Function(
-              GoSlice, GoSlice, GoSlice, GoSlice, GoSlice)>>('ProveChaCha');
+              GoSlice, GoSlice, GoSlice, GoSlice)>>('ProveChaCha');
   late final _ProveChaCha = _ProvePtrChaCha.asFunction<
-      Prove_return Function(GoSlice, GoSlice, GoSlice, GoSlice, GoSlice)>();
+      Prove_return Function(GoSlice, GoSlice, GoSlice, GoSlice)>();
 
 
   Prove_return ProveAES128(
@@ -79,47 +77,43 @@ class NativeLibrary {
       GoSlice key,
       GoSlice nonce,
       GoSlice plaintext,
-      GoSlice ciphertext,
       ) {
     return _ProveAES128(
       counter,
       key,
       nonce,
       plaintext,
-      ciphertext,
     );
   }
 
   late final _ProveAES128Ptr = _lookup<
       ffi.NativeFunction<
           Prove_return Function(
-              GoSlice, GoSlice, GoSlice, GoSlice, GoSlice)>>('ProveAES128');
+              GoSlice, GoSlice, GoSlice, GoSlice)>>('ProveAES128');
   late final _ProveAES128 = _ProveAES128Ptr.asFunction<
-      Prove_return Function(GoSlice, GoSlice, GoSlice, GoSlice, GoSlice)>();
+      Prove_return Function(GoSlice, GoSlice, GoSlice, GoSlice)>();
 
 
   Prove_return ProveAES256(
       GoSlice counter,
       GoSlice key,
       GoSlice nonce,
-      GoSlice plaintext,
-      GoSlice ciphertext,
+      GoSlice plaintext
       ) {
     return _ProveAES256(
       counter,
       key,
       nonce,
-      plaintext,
-      ciphertext,
+      plaintext
     );
   }
 
   late final _ProveAES256Ptr = _lookup<
       ffi.NativeFunction<
           Prove_return Function(
-              GoSlice, GoSlice, GoSlice, GoSlice, GoSlice)>>('ProveAES256');
+              GoSlice, GoSlice, GoSlice, GoSlice)>>('ProveAES256');
   late final _ProveAES256 = _ProveAES256Ptr.asFunction<
-      Prove_return Function(GoSlice, GoSlice, GoSlice, GoSlice, GoSlice)>();
+      Prove_return Function(GoSlice, GoSlice, GoSlice, GoSlice)>();
   
 }
 
