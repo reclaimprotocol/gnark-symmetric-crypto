@@ -17,6 +17,9 @@ limitations under the License.
 package aes
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"encoding/binary"
 	"encoding/hex"
 	"testing"
 
@@ -30,14 +33,23 @@ func TestAES128(t *testing.T) {
 	assert := test.NewAssert(t)
 
 	key := "7E24067817FAE0D743D6CE1F32539163"
-	plaintext := "000102030405060708090A0B0C0D0E0F"  // +"101112131415161718191A1B1C1D1E1F"
-	ciphertext := "5104A106168A72D9790D41EE8EDAD388" // +"EB2E1EFC46DA57C8FCE630DF9141BE28"
+	plaintext := "000102030405060708090A0B0C0D0E0F" // +"101112131415161718191A1B1C1D1E1F"
+	// ciphertext := "5104A106168A72D9790D41EE8EDAD388" // +"EB2E1EFC46DA57C8FCE630DF9141BE28"
 	Nonce := "006CB6DBC0543B59DA48D90B"
 	Counter := 1
 
+	// calculate ciphertext ourselves
+	block, err := aes.NewCipher(mustHex(key))
+	if err != nil {
+		panic(err)
+	}
+	cipher := cipher.NewCTR(block, append(mustHex(Nonce), binary.BigEndian.AppendUint32(nil, uint32(Counter))...))
+	ciphertext := make([]byte, len(mustHex(plaintext)))
+	cipher.XORKeyStream(ciphertext, mustHex(plaintext))
+
 	keyAssign := StrToIntSlice(key, true)
 	ptAssign := StrToIntSlice(plaintext, true)
-	ctAssign := StrToIntSlice(ciphertext, true)
+	ctAssign := ciphertext // StrToIntSlice(ciphertext, true)
 	nonceAssign := StrToIntSlice(Nonce, true)
 
 	// witness values preparation
@@ -84,4 +96,12 @@ func StrToIntSlice(inputData string, hexRepresentation bool) []int {
 		data = append(data, int(byteSlice[i]))
 	}
 	return data
+}
+
+func mustHex(s string) []byte {
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }

@@ -2,11 +2,12 @@ package main
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	_ "embed"
 	"encoding/binary"
 	"fmt"
 	"log"
-	"runtime"
 	"sync"
 	"unsafe"
 
@@ -15,9 +16,10 @@ import (
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
-	"github.com/reclaimprotocol/gnark-chacha20/aes"
+	gaes "github.com/reclaimprotocol/gnark-chacha20/aes"
 	"github.com/reclaimprotocol/gnark-chacha20/chachaV3"
 	"github.com/reclaimprotocol/gnark-chacha20/utils"
+	"golang.org/x/crypto/chacha20"
 )
 
 // #include <stdlib.h>
@@ -51,11 +53,13 @@ var chachaDone bool
 var pkAES128Embedded []byte
 var r1cssAES128 constraint.ConstraintSystem
 var pkAES128 groth16.ProvingKey
+var aes128Done bool
 
 //go:embed pk.aes256
 var pkAES256Embedded []byte
 var r1cssAES256 constraint.ConstraintSystem
 var pkAES256 groth16.ProvingKey
+var aes256Done bool
 
 var initChaCha sync.WaitGroup
 var initAES128 sync.WaitGroup
@@ -78,33 +82,10 @@ var initFunc = sync.OnceFunc(func() {
 	fmt.Println("loading ChaCha")
 	var err error
 
-	/*r1cssChaCha = groth16.NewCS(ecc.BN254)
-	_, err = r1cssChaCha.ReadFrom(bytes.NewBuffer(r1cssChaChaEmbedded))
-	if err != nil {
-		panic(err)
-	}
-
-	PrintMemUsage()
-
-	r1cssAES128 = groth16.NewCS(ecc.BN254)
-	_, err = r1cssAES128.ReadFrom(bytes.NewBuffer(r1cssAES128Embedded))
-	if err != nil {
-		panic(err)
-	}
-	PrintMemUsage()
-	r1cssAES256 = groth16.NewCS(ecc.BN254)
-	_, err = r1cssAES256.ReadFrom(bytes.NewBuffer(r1cssAES256Embedded))
-	if err != nil {
-		panic(err)
-	}
-
-	PrintMemUsage()*/
 	curve := ecc.BN254.ScalarField()
 
 	witnessChaCha := chachaV3.ChaChaCircuit{}
-
 	r1cssChaCha, err = frontend.Compile(curve, r1cs.NewBuilder, &witnessChaCha, frontend.WithCapacity(25000))
-
 	if err != nil {
 		panic(err)
 	}
@@ -113,11 +94,11 @@ var initFunc = sync.OnceFunc(func() {
 	if err != nil {
 		panic(err)
 	}
-
 	initChaCha.Done()
 	chachaDone = true
-	/*fmt.Println("compiling AES128")
-	witnessAES128 := aes.AES128Wrapper{
+
+	fmt.Println("compiling AES128")
+	witnessAES128 := gaes.AES128Wrapper{
 		Key:        [16]frontend.Variable{},
 		Plaintext:  [16]frontend.Variable{},
 		Ciphertext: [16]frontend.Variable{},
@@ -134,8 +115,10 @@ var initFunc = sync.OnceFunc(func() {
 		panic(err)
 	}
 	initAES128.Done()
+	aes128Done = true
+
 	fmt.Println("compiling AES256")
-	witnessAES256 := aes.AES256Wrapper{
+	witnessAES256 := gaes.AES256Wrapper{
 		Key:        [32]frontend.Variable{},
 		Plaintext:  [16]frontend.Variable{},
 		Ciphertext: [16]frontend.Variable{},
@@ -149,7 +132,8 @@ var initFunc = sync.OnceFunc(func() {
 	if err != nil {
 		panic(err)
 	}
-	initAES256.Done()*/
+	initAES256.Done()
+	aes256Done = true
 	fmt.Println("Done compiling")
 	// PrintMemUsage()
 })
@@ -161,60 +145,37 @@ func Init() {
 
 //export InitComplete
 func InitComplete() bool {
-	return chachaDone
-}
-
-/*type WitnessChaCha struct {
-	Key     []uints.U32
-	Counter uints.U32 `gnark:",public"`
-	Nonce   []uints.U32
-	In      []uints.U32 `gnark:",public"`
-	Out     []uints.U32 `gnark:",public"`
-}
-
-func (c *WitnessChaCha) Define(api frontend.API) error {
-	return nil
+	return chachaDone && aes128Done && aes256Done
 }
 
 //export ProveChaCha
-func ProveChaCha(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
+func ProveChaCha(cnt []byte, key []byte, nonce []byte, plaintext []byte) (unsafe.Pointer, int) {
 	initChaCha.Wait()
-	uplaintext := utils.BytesToUint32BE(plaintext)
-	uciphertext := utils.BytesToUint32BE(ciphertext)
-	ukey := utils.BytesToUint32LE(key)
-	unonce := utils.BytesToUint32LE(nonce)
 
-	witness := WitnessChaCha{
-		Counter: uints.NewU32(binary.BigEndian.Uint32(cnt)),
-		Key:     make([]uints.U32, len(ukey)),
-		Nonce:   make([]uints.U32, len(unonce)),
-		In:      make([]uints.U32, len(uplaintext)),
-		Out:     make([]uints.U32, len(uciphertext)),
+	if len(cnt) != 4 {
+		log.Panicf("counter length must be 4: %d", len(cnt))
 	}
-	copy(witness.Key[:], ukey)
-	copy(witness.Nonce[:], unonce)
-	copy(witness.In[:], uplaintext)
-	copy(witness.Out[:], uciphertext)
-	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
-	if err != nil {
-		panic(err)
+	if len(key) != 32 {
+		log.Panicf("key length must be 16: %d", len(key))
 	}
-	gProof, err := groth16.Prove(r1cssChaCha, pkChaCha, wtns)
-	if err != nil {
-		panic(err)
+	if len(nonce) != 12 {
+		log.Panicf("nonce length must be 12: %d", len(nonce))
 	}
-	buf := &bytes.Buffer{}
-	_, err = gProof.WriteTo(buf)
-	if err != nil {
-		panic(err)
+	if len(plaintext) != 64 {
+		log.Panicf("plaintext length must be 16: %d", len(plaintext))
 	}
-	res := buf.Bytes()
-	return C.CBytes(res), len(res)
-}*/
 
-//export ProveChaCha
-func ProveChaCha(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
-	initChaCha.Wait()
+	// calculate ciphertext ourselves
+
+	ciphertext := make([]byte, len(plaintext))
+	cipher, err := chacha20.NewUnauthenticatedCipher(key, nonce)
+	if err != nil {
+		panic(err)
+	}
+
+	cipher.SetCounter(binary.BigEndian.Uint32(cnt))
+	cipher.XORKeyStream(ciphertext, plaintext)
+
 	uplaintext := utils.BytesToUint32BERaw(plaintext)
 	uciphertext := utils.BytesToUint32BERaw(ciphertext)
 	ukey := utils.BytesToUint32LERaw(key)
@@ -244,39 +205,8 @@ func ProveChaCha(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []b
 	return C.CBytes(res), len(res)
 }
 
-/*//export ProveChaCha
-func ProveChaCha(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
-	initChaCha.Wait()
-	uplaintext := utils.BytesToUint32BE(plaintext)
-	uciphertext := utils.BytesToUint32BE(ciphertext)
-	ukey := utils.BytesToUint32LE(key)
-	unonce := utils.BytesToUint32LE(nonce)
-
-	witness := chacha.ChaChaCircuit{}
-	copy(witness.Key[:], ukey)
-	copy(witness.Nonce[:], unonce)
-	witness.Counter = uints.NewU32(binary.BigEndian.Uint32(cnt))
-	copy(witness.In[:], uplaintext)
-	copy(witness.Out[:], uciphertext)
-	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
-	if err != nil {
-		panic(err)
-	}
-	gProof, err := groth16.Prove(r1cssChaCha, pkChaCha, wtns)
-	if err != nil {
-		panic(err)
-	}
-	buf := &bytes.Buffer{}
-	_, err = gProof.WriteTo(buf)
-	if err != nil {
-		panic(err)
-	}
-	res := buf.Bytes()
-	return C.CBytes(res), len(res)
-}*/
-
 //export ProveAES128
-func ProveAES128(cnt, key, nonce, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
+func ProveAES128(cnt, key, nonce, plaintext []byte) (unsafe.Pointer, int) {
 	initAES128.Wait()
 	if len(cnt) != 4 {
 		log.Panicf("counter length must be 4: %d", len(cnt))
@@ -290,11 +220,17 @@ func ProveAES128(cnt, key, nonce, plaintext, ciphertext []byte) (unsafe.Pointer,
 	if len(plaintext) != 16 {
 		log.Panicf("plaintext length must be 16: %d", len(plaintext))
 	}
-	if len(ciphertext) != 16 {
-		log.Panicf("ciphertext length must be 16: %d", len(ciphertext))
-	}
 
-	witness := aes.AES128Wrapper{
+	// calculate ciphertext ourselves
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		panic(err)
+	}
+	cipher := cipher.NewCTR(block, append(nonce, cnt...))
+	ciphertext := make([]byte, len(plaintext))
+	cipher.XORKeyStream(ciphertext, plaintext)
+
+	witness := gaes.AES128Wrapper{
 		Counter: binary.BigEndian.Uint32(cnt),
 	}
 
@@ -329,7 +265,7 @@ func ProveAES128(cnt, key, nonce, plaintext, ciphertext []byte) (unsafe.Pointer,
 }
 
 //export ProveAES256
-func ProveAES256(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []byte) (unsafe.Pointer, int) {
+func ProveAES256(cnt []byte, key []byte, nonce []byte, plaintext []byte) (unsafe.Pointer, int) {
 	initAES256.Wait()
 
 	if len(cnt) != 4 {
@@ -344,11 +280,17 @@ func ProveAES256(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []b
 	if len(plaintext) != 16 {
 		log.Panicf("plaintext length must be 16: %d", len(plaintext))
 	}
-	if len(ciphertext) != 16 {
-		log.Panicf("ciphertext length must be 16: %d", len(ciphertext))
-	}
 
-	witness := aes.AES256Wrapper{
+	// calculate ciphertext ourselves
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		panic(err)
+	}
+	cipher := cipher.NewCTR(block, append(nonce, cnt...))
+	ciphertext := make([]byte, len(plaintext))
+	cipher.XORKeyStream(ciphertext, plaintext)
+
+	witness := gaes.AES256Wrapper{
 		Counter: binary.BigEndian.Uint32(cnt),
 	}
 	for i := 0; i < len(key); i++ {
@@ -379,25 +321,5 @@ func ProveAES256(cnt []byte, key []byte, nonce []byte, plaintext, ciphertext []b
 		panic(err)
 	}
 	res := buf.Bytes()
-	/*os.Remove("heap.prof")
-	f, _ := os.OpenFile("heap.prof", os.O_CREATE|os.O_RDWR, 0777)
-	defer f.Close()
-	pprof.WriteHeapProfile(f)*/
-	PrintMemUsage()
-
 	return C.CBytes(res), len(res)
-}
-
-func PrintMemUsage() {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
-	fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
-	fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
-	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
-	fmt.Printf("\tNumGC = %v\n", m.NumGC)
-}
-
-func bToMb(b uint64) uint64 {
-	return b / 1024 / 1024
 }
