@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:hex/hex.dart';
@@ -93,25 +95,18 @@ class _MyHomePageState extends State<MyHomePage> {
       }
       _counter++;
       var now = DateTime.timestamp();
-      final key = hexToGoSlice('D9C2B1A3CC33A5E2BB2687743747474238AE2EACD2732E2AAD793769B3E42BAE');
-      final nonce = hexToGoSlice('CF3F95A5033F258FE329C9E4');
-      final plaintext = hexToGoSlice('EA2D019860FA70BC851D859BBF7C4CD7BB6684B0E4D1E820F481DD8B1EE7449E03AE65DD401FB9D61F74CD1A12C9449AFB56FE57D3CC6B891F7C9572CDD1C808');
-      final counter = hexToGoSlice('00000001');
+      final params = hexToGoSlice('7b22636970686572223a226165732d3132382d637472222c226b6579223a223435386263336235636431663438326132336166656363313738633839396263222c226e6f6e6365223a22653739353030373234373963316161666638323733623361222c22636f756e746572223a312c22696e707574223a226436323966326461613437373662643362303031303165383232376466633963227d');
 
-      final proof = prover.ProveChaCha(counter.ref, key.ref, nonce.ref, plaintext.ref);
-      final proofStr = HEX.encode(proof.r0.asTypedList(proof.r1));
+
+      final proof = prover.Prove(params.ref);
+      final proofStr = String.fromCharCodes(proof.r0.asTypedList(proof.r1));
+      final output = jsonDecode(proofStr) as Map<String, dynamic>;
       prover.Free(proof.r0);
-      calloc.free(key.ref.data);
-      calloc.free(key);
-      calloc.free(nonce.ref.data);
-      calloc.free(nonce);
-      calloc.free(plaintext.ref.data);
-      calloc.free(plaintext);
-      calloc.free(counter.ref.data);
-      calloc.free(counter);
-      _proof = proofStr;
+      calloc.free(params.ref.data);
+      calloc.free(params);
+      _proof = output['output']!;
       _proof = '$_proof\nTook: ${DateTime.timestamp().difference(now).inMilliseconds} ms';
-      now = DateTime.timestamp();
+     /*now = DateTime.timestamp();
       final keyAES128 = hexToGoSlice('7E24067817FAE0D743D6CE1F32539163');
       final nonceAES128  = hexToGoSlice('006CB6DBC0543B59DA48D90B');
       final plaintextAES128  =  hexToGoSlice('000102030405060708090A0B0C0D0E0F');
@@ -149,7 +144,7 @@ class _MyHomePageState extends State<MyHomePage> {
       calloc.free(counterAES256.ref.data);
       calloc.free(counterAES256);
       _proof = '$_proof\n\nAES256: $proofStrAES256';
-      _proof = '$_proof\n\nTook: ${DateTime.timestamp().difference(now).inMilliseconds} ms';
+      _proof = '$_proof\n\nTook: ${DateTime.timestamp().difference(now).inMilliseconds} ms';*/
     });
   }
 

@@ -50,71 +50,20 @@ class NativeLibrary {
   _lookup<ffi.NativeFunction<ffi.Uint8 Function()>>('InitComplete');
   late final _InitComplete = _InitCompletePtr.asFunction<int Function()>();
 
-  Prove_return ProveChaCha(
-    GoSlice counter,
-    GoSlice key,
-    GoSlice nonce,
-    GoSlice plaintext
+  Prove_return Prove(
+    GoSlice params
   ) {
-    return _ProveChaCha(
-      counter,
-      key,
-      nonce,
-      plaintext
+    return _Prove(
+        params
     );
   }
 
-  late final _ProvePtrChaCha = _lookup<
+  late final _ProvePtr = _lookup<
       ffi.NativeFunction<
           Prove_return Function(
-              GoSlice, GoSlice, GoSlice, GoSlice)>>('ProveChaCha');
-  late final _ProveChaCha = _ProvePtrChaCha.asFunction<
-      Prove_return Function(GoSlice, GoSlice, GoSlice, GoSlice)>();
-
-
-  Prove_return ProveAES128(
-      GoSlice counter,
-      GoSlice key,
-      GoSlice nonce,
-      GoSlice plaintext,
-      ) {
-    return _ProveAES128(
-      counter,
-      key,
-      nonce,
-      plaintext,
-    );
-  }
-
-  late final _ProveAES128Ptr = _lookup<
-      ffi.NativeFunction<
-          Prove_return Function(
-              GoSlice, GoSlice, GoSlice, GoSlice)>>('ProveAES128');
-  late final _ProveAES128 = _ProveAES128Ptr.asFunction<
-      Prove_return Function(GoSlice, GoSlice, GoSlice, GoSlice)>();
-
-
-  Prove_return ProveAES256(
-      GoSlice counter,
-      GoSlice key,
-      GoSlice nonce,
-      GoSlice plaintext
-      ) {
-    return _ProveAES256(
-      counter,
-      key,
-      nonce,
-      plaintext
-    );
-  }
-
-  late final _ProveAES256Ptr = _lookup<
-      ffi.NativeFunction<
-          Prove_return Function(
-              GoSlice, GoSlice, GoSlice, GoSlice)>>('ProveAES256');
-  late final _ProveAES256 = _ProveAES256Ptr.asFunction<
-      Prove_return Function(GoSlice, GoSlice, GoSlice, GoSlice)>();
-  
+              GoSlice)>>('Prove');
+  late final _Prove = _ProvePtr.asFunction<
+      Prove_return Function(GoSlice)>();
 }
 
 final class GoSlice extends ffi.Struct {
