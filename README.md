@@ -1,15 +1,14 @@
 # gnark-chacha20
-ChaCha20 implementation using gnark
+ChaCha20, AES-128-CTR AES-256-CTR implementations using gnark
 
-# Run
+# Run keygen 
+## Compile all circuits, generate proving and verification keys
 ```
-go get ./...
-go run .
-go test ./...
+go run keygen.go
 ```
 
 # Build
-## Wasm
+## Wasm (deprecated)
 ```
 GOOS=js GOARCH=wasm go build -o chacha.wasm
 ```
@@ -18,8 +17,8 @@ GOOS=js GOARCH=wasm go build -o chacha.wasm
 install latest NDK:
 set CC and CXX (use your paths)
 ```
-CC=/home/scratch/android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android30-clang CXX=/home/scratch/android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android30-clang++ CGO_ENABLED=1 GOOS=android GOARCH=amd64 go build -buildmode=c-shared -o libprove.so prove/bind.go
-CC=/home/scratch/android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang CXX=/home/scratch/android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang++ CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build -buildmode=c-shared -o libprove.so prove/bind.go
+CC=android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android30-clang CXX=android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android30-clang++ CGO_ENABLED=1 GOOS=android GOARCH=amd64 go build -buildmode=c-shared -o libprove.so libprove.go
+CC=android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang CXX=android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang++ CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build -buildmode=c-shared -o libprove.so libprove.go
 ```
 
 
