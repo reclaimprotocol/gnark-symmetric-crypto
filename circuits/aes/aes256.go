@@ -14,15 +14,10 @@ const AES_256_KS_WORDS = NB * (AES_256_ROUNDS + 1)
 const BLOCKS = 1
 
 type AES256Wrapper struct {
-	Key        [AES_256_KEY_SIZE_BYTES]frontend.Variable
-	Nonce      [12]frontend.Variable
-	Counter    frontend.Variable
-	Plaintext  [BLOCKS * 16]frontend.Variable `gnark:",public"`
-	Ciphertext [BLOCKS * 16]frontend.Variable `gnark:",public"`
+	AESWrapper
 }
 
 func (circuit *AES256Wrapper) Define(api frontend.API) error {
-
 	// init aes gadget
 	aes := NewAES256(api)
 	counter := circuit.Counter
@@ -58,7 +53,7 @@ func NewAES256(api frontend.API) AES256 {
 }
 
 // AES256 encrypt function
-func (aes *AES256) Encrypt(key [AES_256_KEY_SIZE_BYTES]frontend.Variable, pt [16]frontend.Variable) [16]frontend.Variable {
+func (aes *AES256) Encrypt(key []frontend.Variable, pt [16]frontend.Variable) [16]frontend.Variable {
 
 	// expand key
 	expandedKey := aes.ExpandKey(key)
@@ -101,7 +96,7 @@ func (aes *AES256) Encrypt(key [AES_256_KEY_SIZE_BYTES]frontend.Variable, pt [16
 }
 
 // expands 16 byte key to 240 byte output
-func (aes *AES256) ExpandKey(key [AES_256_KEY_SIZE_BYTES]frontend.Variable) [AES_256_KS_WORDS * 4]frontend.Variable {
+func (aes *AES256) ExpandKey(key []frontend.Variable) [AES_256_KS_WORDS * 4]frontend.Variable {
 
 	var expand [AES_256_KS_WORDS * 4]frontend.Variable
 	i := 0

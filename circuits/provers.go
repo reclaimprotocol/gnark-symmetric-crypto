@@ -6,7 +6,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
-	aes2 "gnark-symmetric-crypto/circuits/aes"
+	gaes "gnark-symmetric-crypto/circuits/aes"
 	"gnark-symmetric-crypto/circuits/chachaV3"
 	"gnark-symmetric-crypto/utils"
 	"log"
@@ -19,17 +19,16 @@ import (
 )
 
 type Prover interface {
-	Prove(r1cs constraint.ConstraintSystem, pk groth16.ProvingKey, cnt []byte, key []byte, nonce []byte, plaintext []byte) (proof, ciphertext []byte)
+	Prove(key []byte, nonce []byte, counter uint32, plaintext []byte) (proof, ciphertext []byte)
 }
 
 type ChaChaProver struct {
+	r1cs constraint.ConstraintSystem
+	pk   groth16.ProvingKey
 }
 
-func (*ChaChaProver) Prove(r1cssChaCha constraint.ConstraintSystem, pkChaCha groth16.ProvingKey, cnt []byte, key []byte, nonce []byte, plaintext []byte) ([]byte, []byte) {
+func (cp *ChaChaProver) Prove(key []byte, nonce []byte, counter uint32, plaintext []byte) ([]byte, []byte) {
 
-	if len(cnt) != 4 {
-		log.Panicf("counter length must be 4: %d", len(cnt))
-	}
 	if len(key) != 32 {
 		log.Panicf("key length must be 16: %d", len(key))
 	}
@@ -48,7 +47,7 @@ func (*ChaChaProver) Prove(r1cssChaCha constraint.ConstraintSystem, pkChaCha gro
 		panic(err)
 	}
 
-	cipher.SetCounter(binary.BigEndian.Uint32(cnt))
+	cipher.SetCounter(counter)
 	cipher.XORKeyStream(ciphertext, plaintext)
 
 	uplaintext := utils.BytesToUint32BERaw(plaintext)
@@ -59,7 +58,7 @@ func (*ChaChaProver) Prove(r1cssChaCha constraint.ConstraintSystem, pkChaCha gro
 	witness := chachaV3.ChaChaCircuit{}
 	copy(witness.Key[:], utils.UintsToBits(ukey))
 	copy(witness.Nonce[:], utils.UintsToBits(unonce))
-	witness.Counter = utils.Uint32ToBits(binary.BigEndian.Uint32(cnt))
+	witness.Counter = utils.Uint32ToBits(counter)
 	copy(witness.In[:], utils.UintsToBits(uplaintext))
 	copy(witness.Out[:], utils.UintsToBits(uciphertext))
 
@@ -67,7 +66,7 @@ func (*ChaChaProver) Prove(r1cssChaCha constraint.ConstraintSystem, pkChaCha gro
 	if err != nil {
 		panic(err)
 	}
-	gProof, err := groth16.Prove(r1cssChaCha, pkChaCha, wtns)
+	gProof, err := groth16.Prove(cp.r1cs, cp.pk, wtns)
 	if err != nil {
 		panic(err)
 	}
@@ -79,21 +78,21 @@ func (*ChaChaProver) Prove(r1cssChaCha constraint.ConstraintSystem, pkChaCha gro
 	return buf.Bytes(), ciphertext
 }
 
-type AES128Prover struct {
+type AESProver struct {
+	r1cs constraint.ConstraintSystem
+	pk   groth16.ProvingKey
 }
 
-func (*AES128Prover) Prove(r1cssAES128 constraint.ConstraintSystem, pkAES128 groth16.ProvingKey, cnt []byte, key []byte, nonce []byte, plaintext []byte) ([]byte, []byte) {
-	if len(cnt) != 4 {
-		log.Panicf("counter length must be 4: %d", len(cnt))
-	}
-	if len(key) != 16 {
-		log.Panicf("key length must be 16: %d", len(key))
+func (ap *AESProver) Prove(key []byte, nonce []byte, counter uint32, plaintext []byte) ([]byte, []byte) {
+
+	if len(key) != 32 && len(key) != 16 {
+		log.Panicf("key length must be 16 or 32: %d", len(key))
 	}
 	if len(nonce) != 12 {
 		log.Panicf("nonce length must be 12: %d", len(nonce))
 	}
-	if len(plaintext) != 16*aes2.BLOCKS {
-		log.Panicf("plaintext length must be 16: %d", len(plaintext))
+	if len(plaintext) != 16*gaes.BLOCKS {
+		log.Panicf("plaintext length must be %d: %d", 16*gaes.BLOCKS, len(plaintext))
 	}
 
 	// calculate ciphertext ourselves
@@ -101,92 +100,41 @@ func (*AES128Prover) Prove(r1cssAES128 constraint.ConstraintSystem, pkAES128 gro
 	if err != nil {
 		panic(err)
 	}
-	cipher := cipher.NewCTR(block, append(nonce, cnt...))
+	cipher := cipher.NewCTR(block, append(nonce, binary.BigEndian.AppendUint32(nil, counter)...))
 	ciphertext := make([]byte, len(plaintext))
 	cipher.XORKeyStream(ciphertext, plaintext)
 
-	witness := aes2.AES128Wrapper{
-		Counter: binary.BigEndian.Uint32(cnt),
+	wrapper := gaes.AESWrapper{
+		Key: make([]frontend.Variable, len(key)),
 	}
 
+	wrapper.Counter = counter
 	for i := 0; i < len(key); i++ {
-		witness.Key[i] = key[i]
+		wrapper.Key[i] = key[i]
 	}
 	for i := 0; i < len(nonce); i++ {
-		witness.Nonce[i] = nonce[i]
+		wrapper.Nonce[i] = nonce[i]
 	}
 	for i := 0; i < len(plaintext); i++ {
-		witness.Plaintext[i] = plaintext[i]
-	}
-	for i := 0; i < len(ciphertext); i++ {
-		witness.Ciphertext[i] = ciphertext[i]
-	}
-
-	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
-	if err != nil {
-		panic(err)
-	}
-	gProof, err := groth16.Prove(r1cssAES128, pkAES128, wtns)
-	if err != nil {
-		panic(err)
-	}
-	buf := &bytes.Buffer{}
-	_, err = gProof.WriteTo(buf)
-	if err != nil {
-		panic(err)
-	}
-	return buf.Bytes(), ciphertext
-}
-
-type AES256Prover struct {
-}
-
-func (*AES256Prover) Prove(r1cssAES256 constraint.ConstraintSystem, pkAES256 groth16.ProvingKey, cnt []byte, key []byte, nonce []byte, plaintext []byte) ([]byte, []byte) {
-
-	if len(cnt) != 4 {
-		log.Panicf("counter length must be 4: %d", len(cnt))
-	}
-	if len(key) != 32 {
-		log.Panicf("key length must be 32: %d", len(key))
-	}
-	if len(nonce) != 12 {
-		log.Panicf("nonce length must be 12: %d", len(nonce))
-	}
-	if len(plaintext) != 16*aes2.BLOCKS {
-		log.Panicf("plaintext length must be 16: %d", len(plaintext))
-	}
-
-	// calculate ciphertext ourselves
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		panic(err)
-	}
-	cipher := cipher.NewCTR(block, append(nonce, cnt...))
-	ciphertext := make([]byte, len(plaintext))
-	cipher.XORKeyStream(ciphertext, plaintext)
-
-	witness := aes2.AES256Wrapper{
-		Counter: binary.BigEndian.Uint32(cnt),
-	}
-	for i := 0; i < len(key); i++ {
-		witness.Key[i] = key[i]
-	}
-	for i := 0; i < len(nonce); i++ {
-		witness.Nonce[i] = nonce[i]
-	}
-	for i := 0; i < len(plaintext); i++ {
-		witness.Plaintext[i] = plaintext[i]
+		wrapper.Plaintext[i] = plaintext[i]
 	}
 
 	for i := 0; i < len(ciphertext); i++ {
-		witness.Ciphertext[i] = ciphertext[i]
+		wrapper.Ciphertext[i] = ciphertext[i]
 	}
 
-	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
+	var circuit frontend.Circuit
+	if len(key) == 16 {
+		circuit = &gaes.AES128Wrapper{AESWrapper: wrapper}
+	} else {
+		circuit = &gaes.AES256Wrapper{AESWrapper: wrapper}
+	}
+
+	wtns, err := frontend.NewWitness(circuit, ecc.BN254.ScalarField())
 	if err != nil {
 		panic(err)
 	}
-	gProof, err := groth16.Prove(r1cssAES256, pkAES256, wtns)
+	gProof, err := groth16.Prove(ap.r1cs, ap.pk, wtns)
 	if err != nil {
 		panic(err)
 	}

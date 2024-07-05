@@ -42,11 +42,13 @@ func TestAES256(t *testing.T) {
 
 	// witness values preparation
 	assignment := AES256Wrapper{
-		Key:        [32]frontend.Variable{},
-		Counter:    Counter,
-		Nonce:      [12]frontend.Variable{},
-		Plaintext:  [16]frontend.Variable{},
-		Ciphertext: [16]frontend.Variable{},
+		AESWrapper{
+			Key:        make([]frontend.Variable, 32),
+			Counter:    Counter,
+			Nonce:      [12]frontend.Variable{},
+			Plaintext:  [16]frontend.Variable{},
+			Ciphertext: [16]frontend.Variable{},
+		},
 	}
 
 	// assign values here because required to use make in assignment
@@ -64,8 +66,5 @@ func TestAES256(t *testing.T) {
 		assignment.Nonce[i] = nonceAssign[i]
 	}
 
-	// var circuit SHA256
-	var circuit AES256Wrapper
-
-	assert.CheckCircuit(&circuit, test.WithValidAssignment(&assignment), test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254))
+	assert.CheckCircuit(&assignment, test.WithValidAssignment(&assignment), test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254))
 }

@@ -23,11 +23,7 @@ import (
 )
 
 type AES128Wrapper struct {
-	Key        [16]frontend.Variable
-	Nonce      [12]frontend.Variable
-	Counter    frontend.Variable
-	Plaintext  [BLOCKS * 16]frontend.Variable `gnark:",public"`
-	Ciphertext [BLOCKS * 16]frontend.Variable `gnark:",public"`
+	AESWrapper
 }
 
 func (circuit *AES128Wrapper) Define(api frontend.API) error {
@@ -45,6 +41,7 @@ func (circuit *AES128Wrapper) Define(api frontend.API) error {
 	for b := 0; b < BLOCKS; b++ {
 		aes.createIV(counter, counterBlock[:])
 		// encrypt counter under key
+
 		keystream := aes.Encrypt(circuit.Key, counterBlock)
 
 		for i := 0; i < 16; i++ {
@@ -68,7 +65,7 @@ func NewAES128(api frontend.API) AES128 {
 }
 
 // aes128 encrypt function
-func (aes *AES128) Encrypt(key [16]frontend.Variable, pt [16]frontend.Variable) [16]frontend.Variable {
+func (aes *AES128) Encrypt(key []frontend.Variable, pt [16]frontend.Variable) [16]frontend.Variable {
 
 	// expand key
 	expandedKey := aes.ExpandKey(key)
@@ -111,7 +108,7 @@ func (aes *AES128) Encrypt(key [16]frontend.Variable, pt [16]frontend.Variable) 
 }
 
 // expands 16 byte key to 176 byte output
-func (aes *AES128) ExpandKey(key [16]frontend.Variable) [176]frontend.Variable {
+func (aes *AES128) ExpandKey(key []frontend.Variable) [176]frontend.Variable {
 
 	var expand [176]frontend.Variable
 	i := 0

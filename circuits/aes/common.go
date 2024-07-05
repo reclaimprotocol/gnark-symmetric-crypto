@@ -2,6 +2,14 @@ package aes
 
 import "github.com/consensys/gnark/frontend"
 
+type AESWrapper struct {
+	Key        []frontend.Variable
+	Nonce      [12]frontend.Variable
+	Counter    frontend.Variable
+	Plaintext  [BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Ciphertext [BLOCKS * 16]frontend.Variable `gnark:",public"`
+}
+
 type AESGadget struct {
 	api   frontend.API
 	sbox0 [256]frontend.Variable

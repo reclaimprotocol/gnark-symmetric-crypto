@@ -54,11 +54,13 @@ func TestAES128(t *testing.T) {
 
 	// witness values preparation
 	assignment := AES128Wrapper{
-		Key:        [16]frontend.Variable{},
-		Counter:    Counter,
-		Nonce:      [12]frontend.Variable{},
-		Plaintext:  [16]frontend.Variable{},
-		Ciphertext: [16]frontend.Variable{},
+		AESWrapper{
+			Key:        make([]frontend.Variable, 16),
+			Counter:    Counter,
+			Nonce:      [12]frontend.Variable{},
+			Plaintext:  [16]frontend.Variable{},
+			Ciphertext: [16]frontend.Variable{},
+		},
 	}
 
 	// assign values here because required to use make in assignment
@@ -76,10 +78,7 @@ func TestAES128(t *testing.T) {
 		assignment.Nonce[i] = nonceAssign[i]
 	}
 
-	// var circuit SHA256
-	var circuit AES128Wrapper
-
-	assert.CheckCircuit(&circuit, test.WithValidAssignment(&assignment), test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254))
+	assert.CheckCircuit(&assignment, test.WithValidAssignment(&assignment), test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254))
 }
 
 func StrToIntSlice(inputData string, hexRepresentation bool) []int {
