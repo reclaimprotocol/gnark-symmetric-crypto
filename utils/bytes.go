@@ -49,13 +49,11 @@ func BytesToUint32LERaw(in []uint8) []frontend.Variable {
 
 func Uint32ToBits(in frontend.Variable) [32]frontend.Variable {
 	var b *big.Int
-	switch in.(type) {
+	switch it := in.(type) {
 	case uint32:
-		b = big.NewInt(int64(in.(uint32)))
-		break
+		b = big.NewInt(int64(it))
 	case int:
-		b = big.NewInt(int64(in.(int)))
-		break
+		b = big.NewInt(int64(it))
 	default:
 		panic("invalid type")
 	}

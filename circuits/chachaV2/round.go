@@ -51,11 +51,6 @@ func xor32(api frontend.API, a, b frontend.Variable) frontend.Variable {
 	return res
 }
 
-func lRot32(api frontend.API, a frontend.Variable, l uint) frontend.Variable {
-	low, up := bitslice.Partition(api, a, BITS_PER_WORD-l, bitslice.WithNbDigits(32))
-	return api.Add(api.Mul(1<<(l), low), up)
-}
-
 func xorRot32(api frontend.API, a, b frontend.Variable, l int) frontend.Variable {
 	aBits := api.ToBinary(a, BITS_PER_WORD)
 	bBits := api.ToBinary(b, BITS_PER_WORD)

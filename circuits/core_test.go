@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"testing"
 	"unsafe"
 
@@ -49,12 +48,7 @@ func TestProveVerifyChacha(t *testing.T) {
 	res, resLen := Prove(bParams)
 	assert.True(resLen > 0)
 
-	h := reflect.SliceHeader{
-		Data: uintptr(res),
-		Len:  resLen,
-		Cap:  resLen,
-	}
-	buf := *(*[]byte)(unsafe.Pointer(&h))
+	buf := unsafe.Slice((*byte)(res), resLen)
 
 	fmt.Println(string(buf))
 	var proveResult *OutputParams
@@ -108,12 +102,7 @@ func TestProveVerifyAES128(t *testing.T) {
 	res, resLen := Prove(bParams)
 	assert.True(resLen > 0)
 
-	h := reflect.SliceHeader{
-		Data: uintptr(res),
-		Len:  resLen,
-		Cap:  resLen,
-	}
-	buf := *(*[]byte)(unsafe.Pointer(&h))
+	buf := unsafe.Slice((*byte)(res), resLen)
 
 	fmt.Println(string(buf))
 	var proveResult *OutputParams
@@ -167,12 +156,7 @@ func TestProveVerifyAES256(t *testing.T) {
 	res, resLen := Prove(bParams)
 	assert.True(resLen > 0)
 
-	h := reflect.SliceHeader{
-		Data: uintptr(res),
-		Len:  resLen,
-		Cap:  resLen,
-	}
-	buf := *(*[]byte)(unsafe.Pointer(&h))
+	buf := unsafe.Slice((*byte)(res), resLen)
 
 	fmt.Println(string(buf))
 	var proveResult *OutputParams
