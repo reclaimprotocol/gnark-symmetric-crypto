@@ -30,13 +30,13 @@ type ChaChaProver struct {
 func (cp *ChaChaProver) Prove(key []byte, nonce []byte, counter uint32, plaintext []byte) ([]byte, []byte) {
 
 	if len(key) != 32 {
-		log.Panicf("key length must be 16: %d", len(key))
+		log.Panicf("key length must be 32: %d", len(key))
 	}
 	if len(nonce) != 12 {
 		log.Panicf("nonce length must be 12: %d", len(nonce))
 	}
 	if len(plaintext) != 64*chachaV3.Blocks {
-		log.Panicf("plaintext length must be 16: %d", len(plaintext))
+		log.Panicf("plaintext length must be 64: %d", len(plaintext))
 	}
 
 	// calculate ciphertext ourselves

@@ -1,14 +1,13 @@
-package circuits
+package verifier
 
 import (
 	"bytes"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
-	"gnark-symmetric-crypto/circuits/aes"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
-	"github.com/consensys/gnark/frontend"
 	"github.com/rs/zerolog/log"
 )
 
@@ -46,23 +45,7 @@ func init() {
 		panic(err)
 	}
 
-	verifiers["aes-128-ctr"] = &AESVerifier{
-		vk: vk,
-		wrapMaker: func(input, output []byte) frontend.Circuit {
-			circuit := &aes.AES128Wrapper{
-				AESWrapper: aes.AESWrapper{Key: make([]frontend.Variable, 16)},
-			}
-
-			for i := 0; i < len(input); i++ {
-				circuit.Plaintext[i] = input[i]
-			}
-
-			for i := 0; i < len(output); i++ {
-				circuit.Ciphertext[i] = output[i]
-			}
-			return circuit
-		},
-	}
+	verifiers["aes-128-ctr"] = &AESVerifier{vk: vk}
 
 	vk = groth16.NewVerifyingKey(ecc.BN254)
 	_, err = vk.ReadFrom(bytes.NewBuffer(vkAES256Embedded))
@@ -70,23 +53,7 @@ func init() {
 		panic(err)
 	}
 
-	verifiers["aes-256-ctr"] = &AESVerifier{
-		vk: vk,
-		wrapMaker: func(input, output []byte) frontend.Circuit {
-			circuit := &aes.AES256Wrapper{
-				AESWrapper: aes.AESWrapper{Key: make([]frontend.Variable, 32)},
-			}
-
-			for i := 0; i < len(input); i++ {
-				circuit.Plaintext[i] = input[i]
-			}
-
-			for i := 0; i < len(output); i++ {
-				circuit.Ciphertext[i] = output[i]
-			}
-			return circuit
-		},
-	}
+	verifiers["aes-256-ctr"] = &AESVerifier{vk: vk}
 
 }
 
@@ -102,4 +69,12 @@ func Verify(params []byte) bool {
 		return verifier.Verify(mustHex(inputParams.Proof), mustHex(inputParams.Input), mustHex(inputParams.Output))
 	}
 	return false
+}
+
+func mustHex(s string) []byte {
+	res, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return res
 }

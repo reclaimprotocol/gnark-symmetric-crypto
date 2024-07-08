@@ -100,7 +100,7 @@ var InitFunc = sync.OnceFunc(func() {
 			Key: make([]frontend.Variable, 16),
 		},
 	}
-	r1csAES128, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES128, frontend.WithCapacity(150000))
+	r1csAES128, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES128, frontend.WithCapacity(600000))
 
 	if err != nil {
 		panic(err)
@@ -129,7 +129,7 @@ var InitFunc = sync.OnceFunc(func() {
 			Key: make([]frontend.Variable, 32),
 		},
 	}
-	r1csAES256, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES256, frontend.WithCapacity(200000))
+	r1csAES256, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES256, frontend.WithCapacity(800000))
 	if err != nil {
 		panic(err)
 	}

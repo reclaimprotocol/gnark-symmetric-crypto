@@ -58,8 +58,8 @@ func TestAES128(t *testing.T) {
 			Key:        make([]frontend.Variable, 16),
 			Counter:    Counter,
 			Nonce:      [12]frontend.Variable{},
-			Plaintext:  [16]frontend.Variable{},
-			Ciphertext: [16]frontend.Variable{},
+			Plaintext:  [64]frontend.Variable{},
+			Ciphertext: [64]frontend.Variable{},
 		},
 	}
 

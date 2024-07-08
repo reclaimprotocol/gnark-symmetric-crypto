@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"gnark-symmetric-crypto/verifier"
 	"testing"
 	"unsafe"
 
@@ -55,7 +56,7 @@ func TestProveVerifyChacha(t *testing.T) {
 	err = json.Unmarshal(buf, &proveResult)
 	assert.NoError(err)
 
-	verifyParams := &InputVerifyParams{
+	verifyParams := &verifier.InputVerifyParams{
 		Cipher: "chacha20",
 		Proof:  proveResult.Proof,
 		Input:  params.Input,
@@ -65,7 +66,7 @@ func TestProveVerifyChacha(t *testing.T) {
 	bverifyParams, err := json.Marshal(verifyParams)
 	assert.NoError(err)
 	fmt.Println(string(bverifyParams))
-	assert.True(Verify(bverifyParams))
+	assert.True(verifier.Verify(bverifyParams))
 }
 
 func TestProveVerifyAES128(t *testing.T) {
@@ -74,11 +75,11 @@ func TestProveVerifyAES128(t *testing.T) {
 	InitFunc()
 	bKey := make([]byte, 16)
 	bNonce := make([]byte, 12)
-	bPt := make([]byte, 16)
+	bPt := make([]byte, 64)
 
 	rand.Read(bKey)
 	rand.Read(bNonce)
-	rand.Read(bPt)
+	// rand.Read(bPt)
 	bCt := make([]byte, len(bPt))
 
 	block, err := aes.NewCipher(bKey)
@@ -109,7 +110,7 @@ func TestProveVerifyAES128(t *testing.T) {
 	err = json.Unmarshal(buf, &proveResult)
 	assert.NoError(err)
 
-	verifyParams := &InputVerifyParams{
+	verifyParams := &verifier.InputVerifyParams{
 		Cipher: "aes-128-ctr",
 		Proof:  proveResult.Proof,
 		Input:  params.Input,
@@ -119,7 +120,7 @@ func TestProveVerifyAES128(t *testing.T) {
 	bverifyParams, err := json.Marshal(verifyParams)
 	assert.NoError(err)
 	fmt.Println(string(bverifyParams))
-	assert.True(Verify(bverifyParams))
+	assert.True(verifier.Verify(bverifyParams))
 }
 
 func TestProveVerifyAES256(t *testing.T) {
@@ -128,11 +129,11 @@ func TestProveVerifyAES256(t *testing.T) {
 	InitFunc()
 	bKey := make([]byte, 32)
 	bNonce := make([]byte, 12)
-	bPt := make([]byte, 16)
+	bPt := make([]byte, 64)
 
 	rand.Read(bKey)
 	rand.Read(bNonce)
-	rand.Read(bPt)
+	// rand.Read(bPt)
 	bCt := make([]byte, len(bPt))
 
 	block, err := aes.NewCipher(bKey)
@@ -163,7 +164,7 @@ func TestProveVerifyAES256(t *testing.T) {
 	err = json.Unmarshal(buf, &proveResult)
 	assert.NoError(err)
 
-	verifyParams := &InputVerifyParams{
+	verifyParams := &verifier.InputVerifyParams{
 		Cipher: "aes-256-ctr",
 		Proof:  proveResult.Proof,
 		Input:  params.Input,
@@ -173,5 +174,5 @@ func TestProveVerifyAES256(t *testing.T) {
 	bverifyParams, err := json.Marshal(verifyParams)
 	assert.NoError(err)
 	fmt.Println(string(bverifyParams))
-	assert.True(Verify(bverifyParams))
+	assert.True(verifier.Verify(bverifyParams))
 }

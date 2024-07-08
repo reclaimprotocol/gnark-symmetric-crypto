@@ -1,8 +1,7 @@
 package main
 
 import (
-	_ "embed"
-	"gnark-symmetric-crypto/circuits"
+	"gnark-symmetric-crypto/verifier"
 )
 
 // #include <stdlib.h>
@@ -14,5 +13,5 @@ func main() {}
 
 //export Verify
 func Verify(params []byte) bool {
-	return circuits.Verify(params)
+	return verifier.Verify(params)
 }

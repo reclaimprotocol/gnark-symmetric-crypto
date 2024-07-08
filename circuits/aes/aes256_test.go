@@ -46,8 +46,8 @@ func TestAES256(t *testing.T) {
 			Key:        make([]frontend.Variable, 32),
 			Counter:    Counter,
 			Nonce:      [12]frontend.Variable{},
-			Plaintext:  [16]frontend.Variable{},
-			Ciphertext: [16]frontend.Variable{},
+			Plaintext:  [64]frontend.Variable{},
+			Ciphertext: [64]frontend.Variable{},
 		},
 	}
 
