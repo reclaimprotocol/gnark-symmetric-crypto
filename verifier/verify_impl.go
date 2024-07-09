@@ -12,10 +12,9 @@ import (
 )
 
 type InputVerifyParams struct {
-	Cipher string `json:"cipher"`
-	Proof  string `json:"proof"`
-	Input  string `json:"input"`
-	Output string `json:"output"`
+	Cipher        string  `json:"cipher"`
+	Proof         string  `json:"proof"`
+	PublicSignals []uint8 `json:"publicSignals"`
 }
 
 var verifiers = make(map[string]Verifier)
@@ -66,7 +65,7 @@ func Verify(params []byte) bool {
 	}
 
 	if verifier, ok := verifiers[inputParams.Cipher]; ok {
-		return verifier.Verify(mustHex(inputParams.Proof), mustHex(inputParams.Input), mustHex(inputParams.Output))
+		return verifier.Verify(mustHex(inputParams.Proof), inputParams.PublicSignals)
 	}
 	return false
 }

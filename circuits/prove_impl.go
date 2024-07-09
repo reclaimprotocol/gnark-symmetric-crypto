@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"gnark-symmetric-crypto/circuits/aes"
 	"gnark-symmetric-crypto/circuits/chachaV3"
 	"sync"
 	"unsafe"
@@ -21,7 +22,11 @@ import (
 	"C"
 )
 
-type InputParams struct {
+type InputParamsCipher struct {
+	Cipher string `json:"cipher"`
+}
+
+type InputParamsChaCha struct {
 	Cipher  string    `json:"cipher"`
 	Key     [][]uint8 `json:"key"`
 	Nonce   [][]uint8 `json:"nonce"`
@@ -29,9 +34,17 @@ type InputParams struct {
 	Input   [][]uint8 `json:"input"`
 }
 
+type InputParamsAES struct {
+	Cipher  string  `json:"cipher"`
+	Key     []uint8 `json:"key"`
+	Nonce   []uint8 `json:"nonce"`
+	Counter []uint8 `json:"counter"`
+	Input   []uint8 `json:"input"`
+}
+
 type OutputParams struct {
-	Proof  string `json:"proof"`
-	Output string `json:"output"`
+	ProofJson     string `json:"proofJson"`
+	PublicSignals []int  `json:"publicSignals"`
 }
 
 type ProverParams struct {
@@ -93,7 +106,7 @@ var InitFunc = sync.OnceFunc(func() {
 	initChaCha.Done()
 	ChachaDone = true
 
-	/*fmt.Println("compiling AES128")
+	fmt.Println("compiling AES128")
 	witnessAES128 := aes.AES128Wrapper{
 		AESWrapper: aes.AESWrapper{
 			Key: make([]frontend.Variable, 16),
@@ -148,37 +161,66 @@ var InitFunc = sync.OnceFunc(func() {
 
 	initAES256.Done()
 	AES256Done = true
-	fmt.Println("Done compiling")*/
+	fmt.Println("Done compiling")
 
 })
 
 func Prove(params []byte) (unsafe.Pointer, int) {
-	var inputParams *InputParams
-	err := json.Unmarshal(params, &inputParams)
+	var cipherParams *InputParamsCipher
+	err := json.Unmarshal(params, &cipherParams)
 	if err != nil {
 		panic(err)
 	}
-	if prover, ok := provers[inputParams.Cipher]; ok {
+	if prover, ok := provers[cipherParams.Cipher]; ok {
 		prover.wg.Wait()
-		proof, _ := prover.Prove(inputParams.Key, inputParams.Nonce, inputParams.Counter, inputParams.Input)
 
-		res, er := json.Marshal(&OutputParams{
-			Proof: hex.EncodeToString(proof),
-			// Output: hex.EncodeToString(ciphertext),
-		})
-		if er != nil {
-			panic(er)
+		if cipherParams.Cipher == "chacha20" {
+			var inputParams *InputParamsChaCha
+			err = json.Unmarshal(params, &inputParams)
+			if err != nil {
+				panic(err)
+			}
+
+			proof, ciphertext := prover.ProveChaCha(inputParams.Key, inputParams.Nonce, inputParams.Counter, inputParams.Input)
+
+			ct := make([]int, 0, len(ciphertext))
+			for i := 0; i < len(ciphertext); i++ {
+				ct = append(ct, int(ciphertext[i]))
+			}
+
+			res, er := json.Marshal(&OutputParams{
+				ProofJson:     hex.EncodeToString(proof),
+				PublicSignals: ct,
+			})
+			if er != nil {
+				panic(er)
+			}
+			return C.CBytes(res), len(res)
+		} else {
+			{
+				var inputParams *InputParamsAES
+				err = json.Unmarshal(params, &inputParams)
+				if err != nil {
+					panic(err)
+				}
+
+				proof, ciphertext := prover.ProveAES(inputParams.Key, inputParams.Nonce, inputParams.Counter, inputParams.Input)
+				ct := make([]int, 0, len(ciphertext))
+				for i := 0; i < len(ciphertext); i++ {
+					ct = append(ct, int(ciphertext[i]))
+				}
+				res, er := json.Marshal(&OutputParams{
+					ProofJson:     hex.EncodeToString(proof),
+					PublicSignals: ct,
+				})
+				if er != nil {
+					panic(er)
+				}
+				return C.CBytes(res), len(res)
+			}
 		}
-		return C.CBytes(res), len(res)
-	} else {
-		panic("could not find prover " + inputParams.Cipher)
-	}
-}
 
-func mustHex(s string) []byte {
-	res, err := hex.DecodeString(s)
-	if err != nil {
-		panic(err)
+	} else {
+		panic("could not find prover " + cipherParams.Cipher)
 	}
-	return res
 }

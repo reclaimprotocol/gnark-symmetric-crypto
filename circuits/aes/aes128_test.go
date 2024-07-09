@@ -43,9 +43,9 @@ func TestAES128(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	cipher := cipher.NewCTR(block, append(mustHex(Nonce), binary.BigEndian.AppendUint32(nil, uint32(Counter))...))
+	ctr := cipher.NewCTR(block, append(mustHex(Nonce), binary.BigEndian.AppendUint32(nil, uint32(Counter))...))
 	ciphertext := make([]byte, len(mustHex(plaintext)))
-	cipher.XORKeyStream(ciphertext, mustHex(plaintext))
+	ctr.XORKeyStream(ciphertext, mustHex(plaintext))
 
 	keyAssign := StrToIntSlice(key, true)
 	ptAssign := StrToIntSlice(plaintext, true)
@@ -58,8 +58,8 @@ func TestAES128(t *testing.T) {
 			Key:        make([]frontend.Variable, 16),
 			Counter:    Counter,
 			Nonce:      [12]frontend.Variable{},
-			Plaintext:  [64]frontend.Variable{},
-			Ciphertext: [64]frontend.Variable{},
+			Plaintext:  [16]frontend.Variable{},
+			Ciphertext: [16]frontend.Variable{},
 		},
 	}
 

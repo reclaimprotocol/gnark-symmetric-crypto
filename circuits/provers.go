@@ -20,7 +20,8 @@ import (
 )
 
 type Prover interface {
-	Prove(key [][]uint8, nonce [][]uint8, counter []uint8, plaintext [][]uint8) (proof []byte, ciphertext [][]uint8)
+	ProveChaCha(key [][]uint8, nonce [][]uint8, counter []uint8, plaintext [][]uint8) (proof []byte, ciphertext []uint8)
+	ProveAES(key []uint8, nonce []uint8, counter []uint8, plaintext []uint8) (proof []byte, ciphertext []uint8)
 }
 
 type ChaChaProver struct {
@@ -28,7 +29,11 @@ type ChaChaProver struct {
 	pk   groth16.ProvingKey
 }
 
-func (cp *ChaChaProver) Prove(key [][]uint8, nonce [][]uint8, counter []uint8, plaintext [][]uint8) (proof []byte, ct [][]uint8) {
+func (cp *ChaChaProver) ProveAES(_ []uint8, _ []uint8, _ []uint8, _ []uint8) (proof []byte, ciphertext []uint8) {
+	panic("not implemented")
+}
+
+func (cp *ChaChaProver) ProveChaCha(key [][]uint8, nonce [][]uint8, counter []uint8, plaintext [][]uint8) (proof []byte, ct []uint8) {
 
 	if len(key) != 8 {
 		log.Panicf("key length must be 32: %d", len(key))
@@ -61,6 +66,17 @@ func (cp *ChaChaProver) Prove(key [][]uint8, nonce [][]uint8, counter []uint8, p
 
 	uciphertext := utils.BytesToUint32BERaw(bCiphertext)
 	ciphertext := utils.UintsToBits(uciphertext)
+
+	ct = make([]uint8, len(ciphertext)*32)
+	// convert to LE for compatibility with witness-sdk
+	for i := 0; i < len(ciphertext); i++ {
+		for j := 0; j < 4; j++ {
+			for k := 0; k < 8; k++ {
+				bit := uint8((ciphertext[i][j*8+(7-k)]).(uint))
+				ct[i*32+j*8+k] = bit
+			}
+		}
+	}
 
 	witness := &chachaV3.ChaChaCircuit{}
 
@@ -105,7 +121,7 @@ func (cp *ChaChaProver) Prove(key [][]uint8, nonce [][]uint8, counter []uint8, p
 	if err != nil {
 		panic(err)
 	}
-	return buf.Bytes(), nil
+	return buf.Bytes(), ct
 }
 
 type AESProver struct {
@@ -113,56 +129,67 @@ type AESProver struct {
 	pk   groth16.ProvingKey
 }
 
-func (ap *AESProver) Prove(key []byte, nonce []byte, counter uint32, plaintext []byte) ([]byte, []byte) {
+func (ap *AESProver) ProveChaCha(_ [][]uint8, _ [][]uint8, _ []uint8, _ [][]uint8) (proof []byte, ciphertext []uint8) {
+	panic("not implemented")
+}
+func (ap *AESProver) ProveAES(key []uint8, nonce []uint8, counter []uint8, plaintext []uint8) (proof []byte, ct []uint8) {
 
-	if len(key) != 32 && len(key) != 16 {
+	if len(key) != 256 && len(key) != 128 {
 		log.Panicf("key length must be 16 or 32: %d", len(key))
 	}
-	if len(nonce) != 12 {
+	if len(nonce) != 96 {
 		log.Panicf("nonce length must be 12: %d", len(nonce))
 	}
-	if len(plaintext) != 64 {
+	if len(plaintext) != 512 {
 		log.Panicf("plaintext length must be 64: %d", len(plaintext))
 	}
 
 	var proofs [][]byte
 	var ciphertexts []byte
+	bKey := utils.BitsToBytesBE(key)
+	bNonce := utils.BitsToBytesBE(nonce)
+
+	bPlaintext := utils.BitsToBytesBE(plaintext)
+
+	bCounter := utils.BitsToBytesBE(counter)
+	nCounter := binary.BigEndian.Uint32(bCounter)
 
 	// split plaintext into 4 blocks and prove them separately
 	for chunk := 0; chunk < 4; chunk++ {
 		// calculate ciphertext ourselves
-		block, err := aes.NewCipher(key)
+
+		block, err := aes.NewCipher(bKey)
 		if err != nil {
 			panic(err)
 		}
 
-		plaintextChunk := plaintext[chunk*16 : chunk*16+16]
+		bPlaintextChunk := bPlaintext[chunk*16 : chunk*16+16]
+		bCiphertextChunk := make([]byte, len(bPlaintextChunk))
 
-		ctr := cipher.NewCTR(block, append(nonce, binary.BigEndian.AppendUint32(nil, counter+uint32(chunk))...))
-		ciphertext := make([]byte, len(plaintextChunk))
-		ctr.XORKeyStream(ciphertext, plaintextChunk)
+		ctr := cipher.NewCTR(block, append(bNonce, binary.BigEndian.AppendUint32(nil, nCounter+uint32(chunk))...))
+		ctr.XORKeyStream(bCiphertextChunk, bPlaintextChunk)
 
 		wrapper := gaes.AESWrapper{
-			Key: make([]frontend.Variable, len(key)),
+			Key: make([]frontend.Variable, len(bKey)),
 		}
 
-		wrapper.Counter = counter + uint32(chunk)
-		for i := 0; i < len(key); i++ {
-			wrapper.Key[i] = key[i]
+		wrapper.Counter = nCounter + uint32(chunk)
+		for i := 0; i < len(bKey); i++ {
+			wrapper.Key[i] = bKey[i]
 		}
-		for i := 0; i < len(nonce); i++ {
-			wrapper.Nonce[i] = nonce[i]
+		for i := 0; i < len(bNonce); i++ {
+			wrapper.Nonce[i] = bNonce[i]
 		}
-		for i := 0; i < len(plaintextChunk); i++ {
-			wrapper.Plaintext[i] = plaintextChunk[i]
+		for i := 0; i < len(bPlaintextChunk); i++ {
+			wrapper.Plaintext[i] = bPlaintextChunk[i]
 		}
 
-		for i := 0; i < len(ciphertext); i++ {
-			wrapper.Ciphertext[i] = ciphertext[i]
+		for i := 0; i < len(bCiphertextChunk); i++ {
+			wrapper.Ciphertext[i] = bCiphertextChunk[i]
 		}
 
 		var circuit frontend.Circuit
-		if len(key) == 16 {
+		if len(bKey) == 16 {
 			circuit = &gaes.AES128Wrapper{AESWrapper: wrapper}
 		} else {
 			circuit = &gaes.AES256Wrapper{AESWrapper: wrapper}
@@ -181,7 +208,8 @@ func (ap *AESProver) Prove(key []byte, nonce []byte, counter uint32, plaintext [
 		if err != nil {
 			panic(err)
 		}
-		ciphertexts = append(ciphertexts, ciphertext...)
+
+		ciphertexts = append(ciphertexts, bCiphertextChunk...)
 		proofs = append(proofs, buf.Bytes())
 	}
 
@@ -190,5 +218,5 @@ func (ap *AESProver) Prove(key []byte, nonce []byte, counter uint32, plaintext [
 		panic(err)
 	}
 
-	return bProofs, ciphertexts
+	return bProofs, utils.BytesToBitsBE(ciphertexts)
 }

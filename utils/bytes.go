@@ -88,3 +88,24 @@ func BitsToBytesLE(in [][]uint8) []byte {
 	}
 	return res
 }
+
+func BitsToBytesBE(in []uint8) []byte {
+	res := make([]byte, len(in)/8)
+	for i := 0; i < len(res); i++ {
+		for j := 0; j < 8; j++ {
+			res[i] = res[i] | in[i*8+j]<<(7-j)
+		}
+	}
+	return res
+}
+
+func BytesToBitsBE(bytes []uint8) []uint8 {
+	bits := make([]uint8, len(bytes)*8)
+	for i := 0; i < len(bytes); i++ {
+		for j := 0; j < 8; j++ {
+			bits[i*8+j] = (bytes[i] >> (7 - j)) & 1
+		}
+
+	}
+	return bits
+}
