@@ -22,7 +22,8 @@ func Init() {
 
 //export InitComplete
 func InitComplete() bool {
-	return circuits.ChachaDone && circuits.AES128Done && circuits.AES256Done
+	// having chacha is enough to start working, AES can load in background
+	return circuits.ChachaDone
 }
 
 //export Free
