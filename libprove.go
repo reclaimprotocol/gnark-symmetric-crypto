@@ -12,6 +12,9 @@ import (
 
 func main() {}
 
+//export enforce_binding
+func enforce_binding() {}
+
 //export Init
 func Init() {
 	go circuits.InitFunc()
