@@ -52,7 +52,15 @@ type ProverParams struct {
 	wg *sync.WaitGroup
 }
 
-var provers map[string]*ProverParams
+var initChaCha sync.WaitGroup
+var initAES128 sync.WaitGroup
+var initAES256 sync.WaitGroup
+
+var provers = map[string]*ProverParams{
+	"chacha20":    {wg: &initChaCha},
+	"aes-128-ctr": {wg: &initAES128},
+	"aes-256-ctr": {wg: &initAES256},
+}
 
 //go:embed generated/pk.bits
 var pkChaChaEmbedded []byte
@@ -66,10 +74,6 @@ var AES128Done bool
 var pkAES256Embedded []byte
 var AES256Done bool
 
-var initChaCha sync.WaitGroup
-var initAES128 sync.WaitGroup
-var initAES256 sync.WaitGroup
-
 func init() {
 	initChaCha.Add(1)
 	initAES128.Add(1)
@@ -77,8 +81,6 @@ func init() {
 }
 
 var InitFunc = sync.OnceFunc(func() {
-	provers = make(map[string]*ProverParams)
-
 	fmt.Println("compiling ChaCha20")
 	var err error
 
@@ -95,12 +97,9 @@ var InitFunc = sync.OnceFunc(func() {
 		panic(err)
 	}
 
-	provers["chacha20"] = &ProverParams{
-		Prover: &ChaChaProver{
-			r1cs: r1cssChaCha,
-			pk:   pkChaCha,
-		},
-		wg: &initChaCha,
+	provers["chacha20"].Prover = &ChaChaProver{
+		r1cs: r1cssChaCha,
+		pk:   pkChaCha,
 	}
 
 	initChaCha.Done()
@@ -124,12 +123,9 @@ var InitFunc = sync.OnceFunc(func() {
 		panic(err)
 	}
 
-	provers["aes-128-ctr"] = &ProverParams{
-		Prover: &AESProver{
-			r1cs: r1csAES128,
-			pk:   pkAES128,
-		},
-		wg: &initAES128,
+	provers["aes-128-ctr"].Prover = &AESProver{
+		r1cs: r1csAES128,
+		pk:   pkAES128,
 	}
 
 	initAES128.Done()
@@ -151,12 +147,9 @@ var InitFunc = sync.OnceFunc(func() {
 		panic(err)
 	}
 
-	provers["aes-256-ctr"] = &ProverParams{
-		Prover: &AESProver{
-			r1cs: r1csAES256,
-			pk:   pkAES256,
-		},
-		wg: &initAES256,
+	provers["aes-256-ctr"].Prover = &AESProver{
+		r1cs: r1csAES256,
+		pk:   pkAES256,
 	}
 
 	initAES256.Done()
