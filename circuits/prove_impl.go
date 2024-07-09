@@ -68,11 +68,9 @@ var ChachaDone bool
 
 //go:embed generated/pk.aes128
 var pkAES128Embedded []byte
-var AES128Done bool
 
 //go:embed generated/pk.aes256
 var pkAES256Embedded []byte
-var AES256Done bool
 
 func init() {
 	initChaCha.Add(1)
@@ -127,9 +125,7 @@ var InitFunc = sync.OnceFunc(func() {
 		r1cs: r1csAES128,
 		pk:   pkAES128,
 	}
-
 	initAES128.Done()
-	AES128Done = true
 
 	fmt.Println("compiling AES256")
 	witnessAES256 := aes.AES256Wrapper{
@@ -153,12 +149,12 @@ var InitFunc = sync.OnceFunc(func() {
 	}
 
 	initAES256.Done()
-	AES256Done = true
 	fmt.Println("Done compiling")
 
 })
 
 func Prove(params []byte) (unsafe.Pointer, int) {
+	go InitFunc() // in case it wasn't called before
 	var cipherParams *InputParamsCipher
 	err := json.Unmarshal(params, &cipherParams)
 	if err != nil {
