@@ -78,31 +78,37 @@ func (cp *ChaChaProver) Prove(key [][]uint8, nonce [][]uint8, counter []uint8, p
 
 	for i := 0; i < len(witness.Key); i++ {
 		for j := 0; j < len(witness.Key[i]); j++ {
-			witness.Key[i][j] = key[i][j]
+			witness.Key[i][j] = key[i][31-j]
 		}
 	}
 
 	for i := 0; i < len(witness.Nonce); i++ {
 		for j := 0; j < len(witness.Nonce[i]); j++ {
-			witness.Nonce[i][j] = nonce[i][j]
+			witness.Nonce[i][j] = nonce[i][31-j]
 		}
 	}
 
 	for i := 0; i < len(witness.Counter); i++ {
-		witness.Counter[i] = counter[i]
+		witness.Counter[i] = counter[31-i]
 	}
 
 	for i := 0; i < len(witness.In); i++ {
 		for j := 0; j < len(witness.In[i]); j++ {
-			witness.In[i][j] = plaintext[i][j]
+			witness.In[i][j] = plaintext[i][(j/8)*8+(7-j%8)]
 		}
 	}
 
 	for i := 0; i < len(witness.Out); i++ {
 		for j := 0; j < len(witness.Out[i]); j++ {
-			witness.Out[i][j] = ciphertext[i][j]
+			witness.Out[i][j] = ciphertext[i][(j/8)*8+(7-j%8)]
 		}
 	}
+
+	fmt.Println(witness.Key)
+	fmt.Println(witness.Nonce)
+	fmt.Println(witness.Counter)
+	fmt.Println(witness.In)
+	fmt.Println(witness.Out)
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField())
 	if err != nil {
