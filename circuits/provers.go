@@ -6,9 +6,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	gaes "gnark-symmetric-crypto/circuits/aes"
 	"gnark-symmetric-crypto/circuits/chachaV3"
 	"gnark-symmetric-crypto/utils"
@@ -50,7 +48,7 @@ func (cp *ChaChaProver) Prove(key [][]uint8, nonce [][]uint8, counter []uint8, p
 	bPlaintext := utils.BitsToBytesLE(plaintext)
 	bCiphertext := make([]byte, len(bPlaintext))
 
-	cipher, err := chacha20.NewUnauthenticatedCipher(bKey, bNonce)
+	ctr, err := chacha20.NewUnauthenticatedCipher(bKey, bNonce)
 	if err != nil {
 		panic(err)
 	}
@@ -58,21 +56,11 @@ func (cp *ChaChaProver) Prove(key [][]uint8, nonce [][]uint8, counter []uint8, p
 	bCounter := utils.BitsToBytes32LE(counter)
 	nCounter := binary.LittleEndian.Uint32(bCounter)
 
-	cipher.SetCounter(nCounter)
-	cipher.XORKeyStream(bCiphertext, bPlaintext)
-
-	fmt.Println(hex.EncodeToString(bKey))
-	fmt.Println(hex.EncodeToString(bNonce))
-	fmt.Println(hex.EncodeToString(bPlaintext))
-	fmt.Println(hex.EncodeToString(bCiphertext))
+	ctr.SetCounter(nCounter)
+	ctr.XORKeyStream(bCiphertext, bPlaintext)
 
 	uciphertext := utils.BytesToUint32LERaw(bCiphertext)
 	ciphertext := utils.UintsToBits(uciphertext)
-
-	/*uplaintext := utils.BytesToUint32BERaw(plaintext)
-	uciphertext := utils.BytesToUint32BERaw(ciphertext)
-	ukey := utils.BytesToUint32LERaw(key)
-	unonce := utils.BytesToUint32LERaw(nonce)*/
 
 	witness := &chachaV3.ChaChaCircuit{}
 
@@ -100,15 +88,9 @@ func (cp *ChaChaProver) Prove(key [][]uint8, nonce [][]uint8, counter []uint8, p
 
 	for i := 0; i < len(witness.Out); i++ {
 		for j := 0; j < len(witness.Out[i]); j++ {
-			witness.Out[i][j] = ciphertext[i][(j/8)*8+(7-j%8)]
+			witness.Out[i][j] = ciphertext[i][31-((j/8)*8+(7-j%8))]
 		}
 	}
-
-	fmt.Println(witness.Key)
-	fmt.Println(witness.Nonce)
-	fmt.Println(witness.Counter)
-	fmt.Println(witness.In)
-	fmt.Println(witness.Out)
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField())
 	if err != nil {
@@ -156,9 +138,9 @@ func (ap *AESProver) Prove(key []byte, nonce []byte, counter uint32, plaintext [
 
 		plaintextChunk := plaintext[chunk*16 : chunk*16+16]
 
-		cipher := cipher.NewCTR(block, append(nonce, binary.BigEndian.AppendUint32(nil, counter+uint32(chunk))...))
+		ctr := cipher.NewCTR(block, append(nonce, binary.BigEndian.AppendUint32(nil, counter+uint32(chunk))...))
 		ciphertext := make([]byte, len(plaintextChunk))
-		cipher.XORKeyStream(ciphertext, plaintextChunk)
+		ctr.XORKeyStream(ciphertext, plaintextChunk)
 
 		wrapper := gaes.AESWrapper{
 			Key: make([]frontend.Variable, len(key)),
