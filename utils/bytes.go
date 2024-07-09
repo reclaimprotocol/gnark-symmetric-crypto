@@ -72,3 +72,19 @@ func UintsToBits(in []frontend.Variable) [][32]frontend.Variable {
 	}
 	return res
 }
+
+func BitsToBytes32LE(in []uint8) []byte {
+	res := make([]byte, len(in)/8)
+	for i := 0; i < len(in); i++ {
+		res[3-(i/8)] |= in[i] << (7 - (i % 8))
+	}
+	return res
+}
+
+func BitsToBytesLE(in [][]uint8) []byte {
+	res := make([]byte, 0, len(in)*4)
+	for i := 0; i < len(in); i++ {
+		res = append(res, BitsToBytes32LE(in[i])...)
+	}
+	return res
+}

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"gnark-symmetric-crypto/circuits/aes"
 	"gnark-symmetric-crypto/circuits/chachaV3"
 	"sync"
 	"unsafe"
@@ -23,11 +22,11 @@ import (
 )
 
 type InputParams struct {
-	Cipher  string `json:"cipher"`
-	Key     string `json:"key"`
-	Nonce   string `json:"nonce"`
-	Counter uint32 `json:"counter"`
-	Input   string `json:"input"`
+	Cipher  string    `json:"cipher"`
+	Key     [][]uint8 `json:"key"`
+	Nonce   [][]uint8 `json:"nonce"`
+	Counter []uint8   `json:"counter"`
+	Input   [][]uint8 `json:"input"`
 }
 
 type OutputParams struct {
@@ -94,13 +93,13 @@ var InitFunc = sync.OnceFunc(func() {
 	initChaCha.Done()
 	ChachaDone = true
 
-	fmt.Println("compiling AES128")
+	/*fmt.Println("compiling AES128")
 	witnessAES128 := aes.AES128Wrapper{
 		AESWrapper: aes.AESWrapper{
 			Key: make([]frontend.Variable, 16),
 		},
 	}
-	r1csAES128, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES128, frontend.WithCapacity(600000))
+	r1csAES128, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES128, frontend.WithCapacity(150000))
 
 	if err != nil {
 		panic(err)
@@ -129,7 +128,7 @@ var InitFunc = sync.OnceFunc(func() {
 			Key: make([]frontend.Variable, 32),
 		},
 	}
-	r1csAES256, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES256, frontend.WithCapacity(800000))
+	r1csAES256, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES256, frontend.WithCapacity(200000))
 	if err != nil {
 		panic(err)
 	}
@@ -149,7 +148,7 @@ var InitFunc = sync.OnceFunc(func() {
 
 	initAES256.Done()
 	AES256Done = true
-	fmt.Println("Done compiling")
+	fmt.Println("Done compiling")*/
 
 })
 
@@ -161,10 +160,11 @@ func Prove(params []byte) (unsafe.Pointer, int) {
 	}
 	if prover, ok := provers[inputParams.Cipher]; ok {
 		prover.wg.Wait()
-		proof, ciphertext := prover.Prove(mustHex(inputParams.Key), mustHex(inputParams.Nonce), inputParams.Counter, mustHex(inputParams.Input))
+		proof, _ := prover.Prove(inputParams.Key, inputParams.Nonce, inputParams.Counter, inputParams.Input)
+
 		res, er := json.Marshal(&OutputParams{
-			Proof:  hex.EncodeToString(proof),
-			Output: hex.EncodeToString(ciphertext),
+			Proof: hex.EncodeToString(proof),
+			// Output: hex.EncodeToString(ciphertext),
 		})
 		if er != nil {
 			panic(er)
