@@ -1,10 +1,12 @@
 package verifier
 
+import "C"
 import (
 	"bytes"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -56,7 +58,15 @@ func init() {
 
 }
 
-func Verify(params []byte) bool {
+func Verify(params []byte) (res bool) {
+
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+			res = false
+		}
+	}()
+
 	var inputParams *InputVerifyParams
 	err := json.Unmarshal(params, &inputParams)
 	if err != nil {
