@@ -21,5 +21,10 @@ CC=android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-and
 CC=android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang CXX=android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang++ CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build -buildmode=c-shared -o libprove.so libprove.go
 ```
 
+## Linux Arm64 (for AWS)
+```cgo
+CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build  -ldflags="-s -w" -buildmode=c-shared -o libprove.so libprove.go
+CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build  -ldflags="-s -w" -buildmode=c-shared -o libverify.so libverify.go
+```
 
 
