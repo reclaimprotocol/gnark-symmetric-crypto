@@ -199,7 +199,6 @@ func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
 				},
 				PublicSignals: ct,
 			})
-			fmt.Printf("%s\n", res)
 			if er != nil {
 				panic(er)
 			}

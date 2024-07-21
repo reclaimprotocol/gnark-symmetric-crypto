@@ -1,10 +1,17 @@
 package circuits
 
 import (
+	"crypto/rand"
+	"encoding/json"
+	"gnark-symmetric-crypto/utils"
 	"gnark-symmetric-crypto/verifier"
+	"math"
+	"math/big"
 	"sync"
 	"testing"
+	"unsafe"
 
+	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/test"
 )
 
@@ -47,4 +54,70 @@ func TestPanic(t *testing.T) {
 	assert.True(resLen > 2)
 
 	assert.False(verifier.Verify([]byte(`{"cipher":"chacha20"}`)))
+}
+
+func TestFullChaCha20(t *testing.T) {
+	assert := test.NewAssert(t)
+	bKey := make([]byte, 32)
+	bNonce := make([]byte, 12)
+
+	bPt := make([]byte, 64)
+
+	tmp, _ := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
+	counter := uint32(tmp.Uint64())
+
+	rand.Read(bKey)
+	rand.Read(bNonce)
+	rand.Read(bPt)
+
+	key := utils.UintsToBits(utils.BytesToUint32LERaw(bKey))
+	nonce := utils.UintsToBits(utils.BytesToUint32LERaw(bNonce))
+	cnt := utils.Uint32ToBitsLE(counter)
+
+	plaintext := utils.UintsToBits(utils.BytesToUint32BERaw(bPt))
+
+	pt := make([]uint8, len(plaintext)*32)
+	for i := 0; i < len(plaintext); i++ {
+		for j := 0; j < 32; j++ {
+			pt[i*32+j] = uint8(plaintext[i][j].(uint))
+		}
+	}
+
+	inputParams := struct {
+		Cipher  string                  `json:"cipher"`
+		Key     [][32]frontend.Variable `json:"key"`
+		Nonce   [][32]frontend.Variable `json:"nonce"`
+		Counter [32]frontend.Variable   `json:"counter"`
+		Input   [][32]frontend.Variable `json:"input"`
+	}{
+		Cipher:  "chacha20",
+		Key:     key,
+		Nonce:   nonce,
+		Counter: cnt,
+		Input:   plaintext,
+	}
+
+	buf, _ := json.Marshal(inputParams)
+
+	res, resLen := Prove(buf)
+	assert.True(resLen > 0)
+	resBuf := unsafe.Slice((*byte)(res), resLen)
+	var outParams *OutputParams
+	json.Unmarshal(resBuf, &outParams)
+
+	inParams := &verifier.InputVerifyParams{
+		Cipher:        "chacha20",
+		Proof:         outParams.Proof.ProofJson,
+		PublicSignals: append(toUint8(outParams.PublicSignals), pt...),
+	}
+	inBuf, _ := json.Marshal(inParams)
+	assert.True(verifier.Verify(inBuf))
+}
+
+func toUint8(a []int) []uint8 {
+	res := make([]uint8, len(a))
+	for i, v := range a {
+		res[i] = uint8(v)
+	}
+	return res
 }

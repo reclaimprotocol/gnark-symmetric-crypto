@@ -65,6 +65,24 @@ func Uint32ToBits(in frontend.Variable) [32]frontend.Variable {
 	return res
 }
 
+func Uint32ToBitsLE(in frontend.Variable) [32]frontend.Variable {
+	var b *big.Int
+	switch it := in.(type) {
+	case uint32:
+		b = big.NewInt(int64(it))
+	case int:
+		b = big.NewInt(int64(it))
+	default:
+		panic("invalid type")
+	}
+
+	var res [32]frontend.Variable
+	for i := 0; i < 32; i++ {
+		res[i] = b.Bit(31 - i)
+	}
+	return res
+}
+
 func UintsToBits(in []frontend.Variable) [][32]frontend.Variable {
 	res := make([][32]frontend.Variable, len(in))
 	for i := 0; i < len(in); i++ {
