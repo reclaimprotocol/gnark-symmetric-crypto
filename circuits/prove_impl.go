@@ -42,9 +42,13 @@ type InputParamsAES struct {
 	Input   []uint8 `json:"input"`
 }
 
+type Proof struct {
+	ProofJson string `json:"proofJson"`
+}
+
 type OutputParams struct {
-	ProofJson     string `json:"proofJson"`
-	PublicSignals []int  `json:"publicSignals"`
+	Proof         Proof `json:"proof"`
+	PublicSignals []int `json:"publicSignals"`
 }
 
 type ProverParams struct {
@@ -190,9 +194,12 @@ func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
 			}
 
 			res, er := json.Marshal(&OutputParams{
-				ProofJson:     hex.EncodeToString(proof),
+				Proof: Proof{
+					ProofJson: hex.EncodeToString(proof),
+				},
 				PublicSignals: ct,
 			})
+			fmt.Printf("%s\n", res)
 			if er != nil {
 				panic(er)
 			}
@@ -211,7 +218,9 @@ func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
 					ct = append(ct, int(ciphertext[i]))
 				}
 				res, er := json.Marshal(&OutputParams{
-					ProofJson:     hex.EncodeToString(proof),
+					Proof: Proof{
+						ProofJson: hex.EncodeToString(proof),
+					},
 					PublicSignals: ct,
 				})
 				if er != nil {
