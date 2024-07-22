@@ -2,8 +2,6 @@ package chacha
 
 import (
 	"crypto/rand"
-	"encoding/hex"
-	"fmt"
 	"testing"
 
 	"gnark-symmetric-crypto/utils"
@@ -126,10 +124,10 @@ func TestCipher(t *testing.T) {
 	cipher.SetCounter(1)
 	cipher.XORKeyStream(bCt, bPt)
 
-	fmt.Println(hex.EncodeToString(bKey))
+	/*fmt.Println(hex.EncodeToString(bKey))
 	fmt.Println(hex.EncodeToString(bNonce))
 	fmt.Println(hex.EncodeToString(bPt))
-	fmt.Println(hex.EncodeToString(bCt))
+	fmt.Println(hex.EncodeToString(bCt))*/
 
 	plaintext := utils.BytesToUint32BE(bPt)
 	ciphertext := utils.BytesToUint32BE(bCt)

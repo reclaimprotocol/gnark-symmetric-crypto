@@ -4,7 +4,7 @@ import (
 	"github.com/consensys/gnark/frontend"
 )
 
-const Blocks = 16
+const Blocks = 1
 
 type ChaChaCircuit struct {
 	Key     [8]frontend.Variable

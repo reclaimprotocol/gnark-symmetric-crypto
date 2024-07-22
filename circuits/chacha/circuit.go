@@ -5,7 +5,7 @@ import (
 	"github.com/consensys/gnark/std/math/uints"
 )
 
-const Blocks = 160
+const Blocks = 1
 
 type ChaChaCircuit struct {
 	Key     [8]uints.U32
