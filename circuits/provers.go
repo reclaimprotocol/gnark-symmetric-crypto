@@ -11,6 +11,7 @@ import (
 	"gnark-symmetric-crypto/circuits/chachaV3"
 	"gnark-symmetric-crypto/utils"
 	"log"
+	"sync"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -144,8 +145,8 @@ func (ap *AESProver) ProveAES(key []uint8, nonce []uint8, counter []uint8, plain
 		log.Panicf("plaintext length must be 64: %d", len(plaintext))
 	}
 
-	var proofs [][]byte
-	var ciphertexts []byte
+	proofs := make([][]byte, 4)
+	ciphertexts := make([][]byte, 4)
 	bKey := utils.BitsToBytesBE(key)
 	bNonce := utils.BitsToBytesBE(nonce)
 
@@ -154,69 +155,76 @@ func (ap *AESProver) ProveAES(key []uint8, nonce []uint8, counter []uint8, plain
 	bCounter := utils.BitsToBytesBE(counter)
 	nCounter := binary.BigEndian.Uint32(bCounter)
 
+	wg := sync.WaitGroup{}
+	wg.Add(4)
+
 	// split plaintext into 4 blocks and prove them separately
-	for chunk := 0; chunk < 4; chunk++ {
-		// calculate ciphertext ourselves
+	for ciphertextChunk := 0; ciphertextChunk < 4; ciphertextChunk++ {
+		go func(chunk int) {
+			// calculate ciphertext ourselves
+			block, err := aes.NewCipher(bKey)
+			if err != nil {
+				panic(err)
+			}
 
-		block, err := aes.NewCipher(bKey)
-		if err != nil {
-			panic(err)
-		}
+			bPlaintextChunk := bPlaintext[chunk*16 : chunk*16+16]
+			bCiphertextChunk := make([]byte, len(bPlaintextChunk))
 
-		bPlaintextChunk := bPlaintext[chunk*16 : chunk*16+16]
-		bCiphertextChunk := make([]byte, len(bPlaintextChunk))
+			ctr := cipher.NewCTR(block, append(bNonce, binary.BigEndian.AppendUint32(nil, nCounter+uint32(chunk))...))
+			ctr.XORKeyStream(bCiphertextChunk, bPlaintextChunk)
 
-		ctr := cipher.NewCTR(block, append(bNonce, binary.BigEndian.AppendUint32(nil, nCounter+uint32(chunk))...))
-		ctr.XORKeyStream(bCiphertextChunk, bPlaintextChunk)
+			wrapper := gaes.AESWrapper{
+				Key: make([]frontend.Variable, len(bKey)),
+			}
 
-		wrapper := gaes.AESWrapper{
-			Key: make([]frontend.Variable, len(bKey)),
-		}
+			wrapper.Counter = nCounter + uint32(chunk)
+			for i := 0; i < len(bKey); i++ {
+				wrapper.Key[i] = bKey[i]
+			}
+			for i := 0; i < len(bNonce); i++ {
+				wrapper.Nonce[i] = bNonce[i]
+			}
+			for i := 0; i < len(bPlaintextChunk); i++ {
+				wrapper.Plaintext[i] = bPlaintextChunk[i]
+			}
 
-		wrapper.Counter = nCounter + uint32(chunk)
-		for i := 0; i < len(bKey); i++ {
-			wrapper.Key[i] = bKey[i]
-		}
-		for i := 0; i < len(bNonce); i++ {
-			wrapper.Nonce[i] = bNonce[i]
-		}
-		for i := 0; i < len(bPlaintextChunk); i++ {
-			wrapper.Plaintext[i] = bPlaintextChunk[i]
-		}
+			for i := 0; i < len(bCiphertextChunk); i++ {
+				wrapper.Ciphertext[i] = bCiphertextChunk[i]
+			}
 
-		for i := 0; i < len(bCiphertextChunk); i++ {
-			wrapper.Ciphertext[i] = bCiphertextChunk[i]
-		}
+			var circuit frontend.Circuit
+			if len(bKey) == 16 {
+				circuit = &gaes.AES128Wrapper{AESWrapper: wrapper}
+			} else {
+				circuit = &gaes.AES256Wrapper{AESWrapper: wrapper}
+			}
 
-		var circuit frontend.Circuit
-		if len(bKey) == 16 {
-			circuit = &gaes.AES128Wrapper{AESWrapper: wrapper}
-		} else {
-			circuit = &gaes.AES256Wrapper{AESWrapper: wrapper}
-		}
+			wtns, err := frontend.NewWitness(circuit, ecc.BN254.ScalarField())
+			if err != nil {
+				panic(err)
+			}
+			gProof, err := groth16.Prove(ap.r1cs, ap.pk, wtns)
+			if err != nil {
+				panic(err)
+			}
+			buf := &bytes.Buffer{}
+			_, err = gProof.WriteTo(buf)
+			if err != nil {
+				panic(err)
+			}
 
-		wtns, err := frontend.NewWitness(circuit, ecc.BN254.ScalarField())
-		if err != nil {
-			panic(err)
-		}
-		gProof, err := groth16.Prove(ap.r1cs, ap.pk, wtns)
-		if err != nil {
-			panic(err)
-		}
-		buf := &bytes.Buffer{}
-		_, err = gProof.WriteTo(buf)
-		if err != nil {
-			panic(err)
-		}
-
-		ciphertexts = append(ciphertexts, bCiphertextChunk...)
-		proofs = append(proofs, buf.Bytes())
+			ciphertexts[chunk] = bCiphertextChunk
+			proofs[chunk] = buf.Bytes()
+			wg.Done()
+		}(ciphertextChunk)
 	}
+
+	wg.Wait()
 
 	bProofs, err := json.Marshal(proofs)
 	if err != nil {
 		panic(err)
 	}
 
-	return bProofs, utils.BytesToBitsBE(ciphertexts)
+	return bProofs, utils.BytesToBitsBE(bytes.Join(ciphertexts, nil))
 }
