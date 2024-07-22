@@ -161,6 +161,7 @@ func (ap *AESProver) ProveAES(key []uint8, nonce []uint8, counter []uint8, plain
 	// split plaintext into 4 blocks and prove them separately
 	for ciphertextChunk := 0; ciphertextChunk < 4; ciphertextChunk++ {
 		go func(chunk int) {
+			defer wg.Done()
 			// calculate ciphertext ourselves
 			block, err := aes.NewCipher(bKey)
 			if err != nil {
@@ -215,7 +216,7 @@ func (ap *AESProver) ProveAES(key []uint8, nonce []uint8, counter []uint8, plain
 
 			ciphertexts[chunk] = bCiphertextChunk
 			proofs[chunk] = buf.Bytes()
-			wg.Done()
+
 		}(ciphertextChunk)
 	}
 

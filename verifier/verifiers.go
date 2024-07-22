@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"gnark-symmetric-crypto/utils"
+	"sync"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -84,15 +85,17 @@ type AESVerifier struct {
 	vk groth16.VerifyingKey
 }
 
-func (av *AESVerifier) Verify(proof []byte, publicSignals []uint8) bool {
+func (av *AESVerifier) Verify(bProof []byte, publicSignals []uint8) bool {
 
-	witness := &AESWrapper{}
+	if len(publicSignals) != 1024 {
+		return false
+	}
 
 	ciphertext := utils.BitsToBytesBE(publicSignals[:len(publicSignals)/2])
 	plaintext := utils.BitsToBytesBE(publicSignals[len(publicSignals)/2:])
 
 	var proofs [][]byte
-	er := json.Unmarshal(proof, &proofs)
+	er := json.Unmarshal(bProof, &proofs)
 	if er != nil {
 		fmt.Println(er)
 		return false
@@ -100,31 +103,47 @@ func (av *AESVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 
 	numProofs := len(proofs)
 	ptLen := len(plaintext) / numProofs
+	results := make([]bool, numProofs)
+
+	wg := sync.WaitGroup{}
+	wg.Add(numProofs)
 
 	for i := 0; i < numProofs; i++ {
-		for j := 0; j < ptLen; j++ {
-			witness.Plaintext[j] = plaintext[i*ptLen+j]
-			witness.Ciphertext[j] = ciphertext[i*ptLen+j]
-		}
+		go func(chunk int) {
+			defer wg.Done()
+			witness := &AESWrapper{}
+			for j := 0; j < ptLen; j++ {
+				witness.Plaintext[j] = plaintext[chunk*ptLen+j]
+				witness.Ciphertext[j] = ciphertext[chunk*ptLen+j]
+			}
 
-		wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
-		if err != nil {
-			fmt.Println(err)
-			return false
-		}
+			wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 
-		gProof := groth16.NewProof(ecc.BN254)
-		_, err = gProof.ReadFrom(bytes.NewBuffer(proofs[i]))
-		if err != nil {
-			fmt.Println(err)
-			return false
-		}
-		err = groth16.Verify(gProof, av.vk, wtns)
-		if err != nil {
-			fmt.Println(err)
-			return false
-		}
+			gProof := groth16.NewProof(ecc.BN254)
+			_, err = gProof.ReadFrom(bytes.NewBuffer(proofs[chunk]))
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			err = groth16.Verify(gProof, av.vk, wtns)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			results[chunk] = true
+		}(i)
 	}
 
-	return true
+	wg.Wait()
+
+	res := true
+	for i := 0; i < len(results); i++ {
+		res = res && results[i]
+	}
+
+	return res
 }
