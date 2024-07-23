@@ -10,6 +10,7 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -31,6 +32,7 @@ var vkAES128Embedded []byte
 var vkAES256Embedded []byte
 
 func init() {
+	zerolog.SetGlobalLevel(zerolog.Disabled)
 
 	vk := groth16.NewVerifyingKey(ecc.BN254)
 	_, err := vk.ReadFrom(bytes.NewBuffer(vkChachaEmbedded))

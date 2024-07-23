@@ -11,6 +11,7 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
+	"github.com/rs/zerolog"
 )
 
 // #include <stdlib.h>
@@ -150,6 +151,7 @@ var provers = map[string]*ProverParams{
 }
 
 func init() {
+	zerolog.SetGlobalLevel(zerolog.Disabled)
 	initChaCha.Add(1)
 	initAES128.Add(1)
 	initAES256.Add(1)
