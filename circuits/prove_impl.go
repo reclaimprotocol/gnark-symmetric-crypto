@@ -6,15 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"gnark-symmetric-crypto/circuits/aes"
-	"gnark-symmetric-crypto/circuits/chachaV3"
 	"sync"
 	"unsafe"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
-	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/frontend/cs/r1cs"
 )
 
 // #include <stdlib.h>
@@ -66,28 +62,26 @@ var a, b, c bool
 //go:embed generated/pk.bits
 var pkChaChaEmbedded []byte
 
+//go:embed generated/r1cs.bits
+var r1csChaChaEmbedded []byte
+
 //go:embed generated/pk.aes128
 var pkAES128Embedded []byte
+
+//go:embed generated/r1cs.aes128
+var r1csAES128Embedded []byte
 
 //go:embed generated/pk.aes256
 var pkAES256Embedded []byte
 
-func init() {
-	initChaCha.Add(1)
-	initAES128.Add(1)
-	initAES256.Add(1)
-}
-
-func initDone() bool {
-	return a && b && c
-}
+//go:embed generated/r1cs.aes256
+var r1csAES256Embedded []byte
 
 var InitChaChaFunc = sync.OnceFunc(func() {
-	fmt.Println("compiling ChaCha20")
+	fmt.Println("loading ChaCha20")
 	defer initChaCha.Done()
-	curve := ecc.BN254.ScalarField()
-	witnessChaCha := chachaV3.ChaChaCircuit{}
-	r1cssChaCha, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessChaCha)
+	r1csChaCha := groth16.NewCS(ecc.BN254)
+	_, err := r1csChaCha.ReadFrom(bytes.NewBuffer(r1csChaChaEmbedded))
 	if err != nil {
 		panic(err)
 	}
@@ -97,23 +91,18 @@ var InitChaChaFunc = sync.OnceFunc(func() {
 		panic(err)
 	}
 	provers["chacha20"].Prover = &ChaChaProver{
-		r1cs: r1cssChaCha,
+		r1cs: r1csChaCha,
 		pk:   pkChaCha,
 	}
 	a = true
 })
 
 var InitAES128Func = sync.OnceFunc(func() {
-	fmt.Println("compiling AES128")
+	fmt.Println("loading AES128")
 	defer initAES128.Done()
-	curve := ecc.BN254.ScalarField()
-	witnessAES128 := aes.AES128Wrapper{
-		AESWrapper: aes.AESWrapper{
-			Key: make([]frontend.Variable, 16),
-		},
-	}
-	r1csAES128, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES128)
 
+	r1csAES128 := groth16.NewCS(ecc.BN254)
+	_, err := r1csAES128.ReadFrom(bytes.NewBuffer(r1csAES128Embedded))
 	if err != nil {
 		panic(err)
 	}
@@ -132,19 +121,15 @@ var InitAES128Func = sync.OnceFunc(func() {
 })
 
 var InitAES256Func = sync.OnceFunc(func() {
-	fmt.Println("compiling AES256")
+	fmt.Println("loading AES256")
 	defer initAES256.Done()
 
-	curve := ecc.BN254.ScalarField()
-	witnessAES256 := aes.AES256Wrapper{
-		AESWrapper: aes.AESWrapper{
-			Key: make([]frontend.Variable, 32),
-		},
-	}
-	r1csAES256, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES256)
+	r1csAES256 := groth16.NewCS(ecc.BN254)
+	_, err := r1csAES256.ReadFrom(bytes.NewBuffer(r1csAES256Embedded))
 	if err != nil {
 		panic(err)
 	}
+
 	pkAES256 := groth16.NewProvingKey(ecc.BN254)
 	_, err = pkAES256.ReadFrom(bytes.NewBuffer(pkAES256Embedded))
 	if err != nil {
@@ -164,17 +149,26 @@ var provers = map[string]*ProverParams{
 	"aes-256-ctr": {wg: &initAES256},
 }
 
-var InitFunc = sync.OnceFunc(func() {
+func init() {
+	initChaCha.Add(1)
+	initAES128.Add(1)
+	initAES256.Add(1)
 	provers["chacha20"].Init = InitChaChaFunc
 	provers["aes-128-ctr"].Init = InitAES128Func
 	provers["aes-256-ctr"].Init = InitAES256Func
+}
+
+func initDone() bool {
+	return a && b && c
+}
+
+var InitFunc = sync.OnceFunc(func() {
 	go InitChaChaFunc()
 	go InitAES128Func()
 	go InitAES256Func()
 })
 
 func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
-	InitFunc()
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Println(err)
