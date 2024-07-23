@@ -22,8 +22,8 @@ func Init() {
 
 //export InitComplete
 func InitComplete() bool {
-	// having chacha is enough to start working, AES can load in background
-	return circuits.ChachaDone
+	// lazy loading means no need to wait
+	return true
 }
 
 //export Free

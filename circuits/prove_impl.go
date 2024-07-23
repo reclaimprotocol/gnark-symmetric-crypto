@@ -53,22 +53,16 @@ type OutputParams struct {
 
 type ProverParams struct {
 	Prover
-	wg *sync.WaitGroup
+	wg   *sync.WaitGroup
+	Init func()
 }
 
 var initChaCha sync.WaitGroup
 var initAES128 sync.WaitGroup
 var initAES256 sync.WaitGroup
 
-var provers = map[string]*ProverParams{
-	"chacha20":    {wg: &initChaCha},
-	"aes-128-ctr": {wg: &initAES128},
-	"aes-256-ctr": {wg: &initAES256},
-}
-
 //go:embed generated/pk.bits
 var pkChaChaEmbedded []byte
-var ChachaDone bool
 
 //go:embed generated/pk.aes128
 var pkAES128Embedded []byte
@@ -82,12 +76,10 @@ func init() {
 	initAES256.Add(1)
 }
 
-var InitFunc = sync.OnceFunc(func() {
+var InitChaChaFunc = sync.OnceFunc(func() {
 	fmt.Println("compiling ChaCha20")
-	var err error
-
+	defer initChaCha.Done()
 	curve := ecc.BN254.ScalarField()
-
 	witnessChaCha := chachaV3.ChaChaCircuit{}
 	r1cssChaCha, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessChaCha, frontend.WithCapacity(25000))
 	if err != nil {
@@ -98,16 +90,16 @@ var InitFunc = sync.OnceFunc(func() {
 	if err != nil {
 		panic(err)
 	}
-
 	provers["chacha20"].Prover = &ChaChaProver{
 		r1cs: r1cssChaCha,
 		pk:   pkChaCha,
 	}
+})
 
-	initChaCha.Done()
-	ChachaDone = true
-
+var InitAES128Func = sync.OnceFunc(func() {
 	fmt.Println("compiling AES128")
+	defer initAES128.Done()
+	curve := ecc.BN254.ScalarField()
 	witnessAES128 := aes.AES128Wrapper{
 		AESWrapper: aes.AESWrapper{
 			Key: make([]frontend.Variable, 16),
@@ -129,9 +121,14 @@ var InitFunc = sync.OnceFunc(func() {
 		r1cs: r1csAES128,
 		pk:   pkAES128,
 	}
-	initAES128.Done()
 
+})
+
+var InitAES256Func = sync.OnceFunc(func() {
 	fmt.Println("compiling AES256")
+	defer initAES256.Done()
+
+	curve := ecc.BN254.ScalarField()
 	witnessAES256 := aes.AES256Wrapper{
 		AESWrapper: aes.AESWrapper{
 			Key: make([]frontend.Variable, 32),
@@ -152,13 +149,22 @@ var InitFunc = sync.OnceFunc(func() {
 		pk:   pkAES256,
 	}
 
-	initAES256.Done()
-	fmt.Println("Done compiling")
+})
 
+var provers = map[string]*ProverParams{
+	"chacha20":    {wg: &initChaCha},
+	"aes-128-ctr": {wg: &initAES128},
+	"aes-256-ctr": {wg: &initAES256},
+}
+
+var InitFunc = sync.OnceFunc(func() {
+	provers["chacha20"].Init = InitChaChaFunc
+	provers["aes-128-ctr"].Init = InitAES128Func
+	provers["aes-256-ctr"].Init = InitAES256Func
 })
 
 func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
-
+	InitFunc()
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Println(err)
@@ -170,13 +176,13 @@ func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
 		}
 	}()
 
-	go InitFunc() // in case it wasn't called before
 	var cipherParams *InputParamsCipher
 	err := json.Unmarshal(params, &cipherParams)
 	if err != nil {
 		panic(err)
 	}
 	if prover, ok := provers[cipherParams.Cipher]; ok {
+		go prover.Init()
 		prover.wg.Wait()
 
 		if cipherParams.Cipher == "chacha20" {
