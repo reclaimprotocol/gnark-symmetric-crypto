@@ -9,14 +9,23 @@ import (
 	"math/big"
 	"sync"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/test"
 )
 
+func TestInit(t *testing.T) {
+	InitFunc()
+	for !initDone() {
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func TestProveVerify(t *testing.T) {
 	assert := test.NewAssert(t)
+	// InitFunc()
 	wg := new(sync.WaitGroup)
 	wg.Add(3)
 	go func() {

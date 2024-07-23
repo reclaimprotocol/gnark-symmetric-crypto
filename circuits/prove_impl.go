@@ -61,6 +61,8 @@ var initChaCha sync.WaitGroup
 var initAES128 sync.WaitGroup
 var initAES256 sync.WaitGroup
 
+var a, b, c bool
+
 //go:embed generated/pk.bits
 var pkChaChaEmbedded []byte
 
@@ -76,12 +78,16 @@ func init() {
 	initAES256.Add(1)
 }
 
+func initDone() bool {
+	return a && b && c
+}
+
 var InitChaChaFunc = sync.OnceFunc(func() {
 	fmt.Println("compiling ChaCha20")
 	defer initChaCha.Done()
 	curve := ecc.BN254.ScalarField()
 	witnessChaCha := chachaV3.ChaChaCircuit{}
-	r1cssChaCha, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessChaCha, frontend.WithCapacity(25000))
+	r1cssChaCha, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessChaCha)
 	if err != nil {
 		panic(err)
 	}
@@ -94,6 +100,7 @@ var InitChaChaFunc = sync.OnceFunc(func() {
 		r1cs: r1cssChaCha,
 		pk:   pkChaCha,
 	}
+	a = true
 })
 
 var InitAES128Func = sync.OnceFunc(func() {
@@ -105,7 +112,7 @@ var InitAES128Func = sync.OnceFunc(func() {
 			Key: make([]frontend.Variable, 16),
 		},
 	}
-	r1csAES128, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES128, frontend.WithCapacity(150000))
+	r1csAES128, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES128)
 
 	if err != nil {
 		panic(err)
@@ -121,7 +128,7 @@ var InitAES128Func = sync.OnceFunc(func() {
 		r1cs: r1csAES128,
 		pk:   pkAES128,
 	}
-
+	b = true
 })
 
 var InitAES256Func = sync.OnceFunc(func() {
@@ -134,7 +141,7 @@ var InitAES256Func = sync.OnceFunc(func() {
 			Key: make([]frontend.Variable, 32),
 		},
 	}
-	r1csAES256, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES256, frontend.WithCapacity(200000))
+	r1csAES256, err := frontend.Compile(curve, r1cs.NewBuilder, &witnessAES256)
 	if err != nil {
 		panic(err)
 	}
@@ -148,7 +155,7 @@ var InitAES256Func = sync.OnceFunc(func() {
 		r1cs: r1csAES256,
 		pk:   pkAES256,
 	}
-
+	c = true
 })
 
 var provers = map[string]*ProverParams{
@@ -161,6 +168,9 @@ var InitFunc = sync.OnceFunc(func() {
 	provers["chacha20"].Init = InitChaChaFunc
 	provers["aes-128-ctr"].Init = InitAES128Func
 	provers["aes-256-ctr"].Init = InitAES256Func
+	go InitChaChaFunc()
+	go InitAES128Func()
+	go InitAES256Func()
 })
 
 func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
