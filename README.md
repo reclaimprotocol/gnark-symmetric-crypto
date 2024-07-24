@@ -22,16 +22,16 @@ CC=android/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-an
 ```
 
 
-## Linux X64
+## Linux X64 (nodeJS)
 ```cgo
-CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build --ldflags '-s -w' -buildmode=c-shared -o libprove.so libprove.go
-CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build --ldflags '-s -w' -buildmode=c-shared -o libverify.so libverify.go
+CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -tags=compiled --ldflags '-s -w' -buildmode=c-shared -o libprove.so libprove.go
+CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -tags=compiled --ldflags '-s -w' -buildmode=c-shared -o libverify.so libverify.go
 ```
 
-## Linux Arm64 (for AWS)
+## Linux Arm64 (for nodeJS on AWS)
 ```cgo
-CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build  -ldflags="-s -w" -buildmode=c-shared -o libprove.so libprove.go
-CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build  -ldflags="-s -w" -buildmode=c-shared -o libverify.so libverify.go
+CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -tags=compiled -ldflags="-s -w" -buildmode=c-shared -o libprove.so libprove.go
+CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -tags=compiled -ldflags="-s -w" -buildmode=c-shared -o libverify.so libverify.go
 ```
 
 
