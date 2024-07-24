@@ -63,36 +63,23 @@ var a, b, c bool
 //go:embed generated/pk.bits
 var pkChaChaEmbedded []byte
 
-//go:embed generated/r1cs.bits
-var r1csChaChaEmbedded []byte
-
 //go:embed generated/pk.aes128
 var pkAES128Embedded []byte
-
-//go:embed generated/r1cs.aes128
-var r1csAES128Embedded []byte
 
 //go:embed generated/pk.aes256
 var pkAES256Embedded []byte
 
-//go:embed generated/r1cs.aes256
-var r1csAES256Embedded []byte
-
 var InitChaChaFunc = sync.OnceFunc(func() {
 	fmt.Println("loading ChaCha20")
 	defer initChaCha.Done()
-	r1csChaCha := groth16.NewCS(ecc.BN254)
-	_, err := r1csChaCha.ReadFrom(bytes.NewBuffer(r1csChaChaEmbedded))
-	if err != nil {
-		panic(err)
-	}
+
 	pkChaCha := groth16.NewProvingKey(ecc.BN254)
-	_, err = pkChaCha.ReadFrom(bytes.NewBuffer(pkChaChaEmbedded))
+	_, err := pkChaCha.ReadFrom(bytes.NewBuffer(pkChaChaEmbedded))
 	if err != nil {
 		panic(err)
 	}
 	provers["chacha20"].Prover = &ChaChaProver{
-		r1cs: r1csChaCha,
+		r1cs: GetR1CS("chacha20"),
 		pk:   pkChaCha,
 	}
 	a = true
@@ -102,20 +89,14 @@ var InitAES128Func = sync.OnceFunc(func() {
 	fmt.Println("loading AES128")
 	defer initAES128.Done()
 
-	r1csAES128 := groth16.NewCS(ecc.BN254)
-	_, err := r1csAES128.ReadFrom(bytes.NewBuffer(r1csAES128Embedded))
-	if err != nil {
-		panic(err)
-	}
-
 	pkAES128 := groth16.NewProvingKey(ecc.BN254)
-	_, err = pkAES128.ReadFrom(bytes.NewBuffer(pkAES128Embedded))
+	_, err := pkAES128.ReadFrom(bytes.NewBuffer(pkAES128Embedded))
 	if err != nil {
 		panic(err)
 	}
 
 	provers["aes-128-ctr"].Prover = &AESProver{
-		r1cs: r1csAES128,
+		r1cs: GetR1CS("aes-128-ctr"),
 		pk:   pkAES128,
 	}
 	b = true
@@ -125,20 +106,14 @@ var InitAES256Func = sync.OnceFunc(func() {
 	fmt.Println("loading AES256")
 	defer initAES256.Done()
 
-	r1csAES256 := groth16.NewCS(ecc.BN254)
-	_, err := r1csAES256.ReadFrom(bytes.NewBuffer(r1csAES256Embedded))
-	if err != nil {
-		panic(err)
-	}
-
 	pkAES256 := groth16.NewProvingKey(ecc.BN254)
-	_, err = pkAES256.ReadFrom(bytes.NewBuffer(pkAES256Embedded))
+	_, err := pkAES256.ReadFrom(bytes.NewBuffer(pkAES256Embedded))
 	if err != nil {
 		panic(err)
 	}
 
 	provers["aes-256-ctr"].Prover = &AESProver{
-		r1cs: r1csAES256,
+		r1cs: GetR1CS("aes-256-ctr"),
 		pk:   pkAES256,
 	}
 	c = true
