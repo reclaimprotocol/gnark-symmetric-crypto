@@ -1,38 +1,60 @@
-//go:build !compiled
-
 package circuits
 
 import (
-	"bytes"
-	_ "embed"
-	"fmt"
+    "bytes"
+    "fmt"
+    "net/http"
+    "io/ioutil"
+    "time"
 
-	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark/backend/groth16"
-	"github.com/consensys/gnark/constraint"
+    "github.com/consensys/gnark-crypto/ecc"
+    "github.com/consensys/gnark/backend/groth16"
+    "github.com/consensys/gnark/constraint"
 )
 
-//go:embed generated/r1cs.bits
-var r1csChaChaEmbedded []byte
+const (
+    serverURL = "https://gnark-assets.s3.ap-south-1.amazonaws.com"
+    fetchTimeout = 30 * time.Second
+)
 
-//go:embed generated/r1cs.aes128
-var r1csAES128Embedded []byte
+var circuits = map[string]string{
+    "chacha20":    "r1cs.bits",
+    "aes-128-ctr": "r1cs.aes128",
+    "aes-256-ctr": "r1cs.aes256",
+}
 
-//go:embed generated/r1cs.aes256
-var r1csAES256Embedded []byte
+func fetchR1CS(keyName string) ([]byte, error) {
+    client := &http.Client{Timeout: fetchTimeout}
+    resp, err := client.Get(fmt.Sprintf("%s/%s", serverURL, keyName))
+    if err != nil {
+        return nil, fmt.Errorf("error fetching R1CS: %v", err)
+    }
+    defer resp.Body.Close()
 
-var circuits = map[string][]byte{
-	"chacha20":    r1csChaChaEmbedded,
-	"aes-128-ctr": r1csAES128Embedded,
-	"aes-256-ctr": r1csAES256Embedded,
+    if resp.StatusCode != http.StatusOK {
+        return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+    }
+
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return nil, fmt.Errorf("error reading response body: %v", err)
+    }
+
+    return body, nil
 }
 
 func GetR1CS(cipher string) constraint.ConstraintSystem {
-	fmt.Printf("Using embedded R1CS %s\n", cipher)
-	r1cs := groth16.NewCS(ecc.BN254)
-	_, err := r1cs.ReadFrom(bytes.NewBuffer(circuits[cipher]))
-	if err != nil {
-		panic(err)
-	}
-	return r1cs
+    fmt.Printf("Fetching R1CS for %s\n", cipher)
+
+    r1csData, err := fetchR1CS(circuits[cipher])
+    if err != nil {
+        panic(fmt.Errorf("failed to fetch R1CS for %s: %v", cipher, err))
+    }
+
+    r1cs := groth16.NewCS(ecc.BN254)
+    _, err = r1cs.ReadFrom(bytes.NewBuffer(r1csData))
+    if err != nil {
+        panic(err)
+    }
+    return r1cs
 }
