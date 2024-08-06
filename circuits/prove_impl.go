@@ -143,13 +143,14 @@ var provers = map[string]*ProverParams{
 
 const (
   serverURL = "https://gnark-assets.s3.ap-south-1.amazonaws.com"
+  fetchTimeout = 30 * time.Second
 ) 
 
 func fetchKey(keyName string) ([]byte, error) {
-    client := &http.Client{Timeout: 10 * time.Second}
+    client := &http.Client{Timeout: fetchTimeout}
     resp, err := client.Get(fmt.Sprintf("%s/%s", serverURL, keyName))
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("error fetching key: %v", err)
     }
     defer resp.Body.Close()
 
@@ -157,7 +158,12 @@ func fetchKey(keyName string) ([]byte, error) {
         return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
     }
 
-    return ioutil.ReadAll(resp.Body)
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return nil, fmt.Errorf("error reading response body: %v", err)
+    }
+
+    return body, nil
 }
 
 func initDone() bool {
