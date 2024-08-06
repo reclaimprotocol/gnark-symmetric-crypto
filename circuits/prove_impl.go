@@ -142,7 +142,7 @@ var provers = map[string]*ProverParams{
 }
 
 const (
-  serverURL = "http://75.119.151.136:8080/keys" // Need to replace with actual public IP
+  serverURL = "https://gnark-assets.s3.ap-south-1.amazonaws.com"
 ) 
 
 func fetchKey(keyName string) ([]byte, error) {
