@@ -2,6 +2,8 @@ package circuits
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"crypto/subtle"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
@@ -67,11 +69,17 @@ var initChaCha sync.WaitGroup
 var initAES128 sync.WaitGroup
 var initAES256 sync.WaitGroup
 
+const (
+	ChaChaHash = "500d19eeccee0b3749e369c1839a1de0183dc7e8e43c4f9ad36e9c4b6537f03e"
+	AES128Hash = "5c4053dc1a731b5dcd059ca9e1753b018f8713ff4838504a2232f2d4cf5e0526"
+	AES256Hash = "0c0c06a3dbfe1f155a8b191b0d6ea081aae6e74cd77de3acc1d487094b3cab31"
+)
+
 var InitChaChaFunc = sync.OnceFunc(func() {
 	fmt.Println("loading ChaCha20")
 	defer initChaCha.Done()
 
-	pkChaCha, err := fetchKey("pk.bits")
+	pkChaCha, err := fetchKey("pk.bits", ChaChaHash)
 	if err != nil {
 		fmt.Println("failed to fetch key")
 		panic(err)
@@ -89,7 +97,7 @@ var InitAES128Func = sync.OnceFunc(func() {
 	fmt.Println("loading AES128")
 	defer initAES128.Done()
 
-	pkAES128, err := fetchKey("pk.aes128")
+	pkAES128, err := fetchKey("pk.aes128", AES128Hash)
 	if err != nil {
 		fmt.Println("failed to fetch key")
 		panic(err)
@@ -106,7 +114,7 @@ var InitAES256Func = sync.OnceFunc(func() {
 	fmt.Println("loading AES256")
 	defer initAES256.Done()
 
-	pkAES256, err := fetchKey("pk.aes256")
+	pkAES256, err := fetchKey("pk.aes256", AES256Hash)
 	if err != nil {
 		fmt.Println("failed to fetch key")
 		panic(err)
@@ -125,10 +133,9 @@ var provers = map[string]*ProverParams{
 	"aes-256-ctr": {wg: &initAES256},
 }
 
-func fetchKey(keyName string) (groth16.ProvingKey, error) {
+func fetchKey(keyName string, keyHashStr string) (groth16.ProvingKey, error) {
 	client := &http.Client{Timeout: fetchTimeout}
 	keyUrl := fmt.Sprintf("%s/%s", serverURL, keyName)
-	fmt.Printf("fetching key from %s\n", keyUrl)
 	resp, err := client.Get(keyUrl)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching key: %v", err)
@@ -142,6 +149,13 @@ func fetchKey(keyName string) (groth16.ProvingKey, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error reading response body: %v", err)
+	}
+
+	bodyHash := sha256.Sum256(body)
+	keyHash := mustHex(keyHashStr)
+
+	if subtle.ConstantTimeCompare(bodyHash[:], keyHash) != 1 {
+		return nil, fmt.Errorf("invalid key hash")
 	}
 
 	pkey := groth16.NewProvingKey(ecc.BN254)
@@ -253,4 +267,12 @@ func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
 	} else {
 		panic("could not find prover " + cipherParams.Cipher)
 	}
+}
+
+func mustHex(s string) []byte {
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
