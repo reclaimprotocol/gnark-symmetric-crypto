@@ -2,11 +2,16 @@ package circuits
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"crypto/subtle"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -17,6 +22,11 @@ import (
 // #include <stdlib.h>
 import (
 	"C"
+)
+
+const (
+	serverURL    = "https://gnark-assets.s3.ap-south-1.amazonaws.com"
+	fetchTimeout = 30 * time.Second
 )
 
 type InputParamsCipher struct {
@@ -50,48 +60,46 @@ type OutputParams struct {
 
 type ProverParams struct {
 	Prover
-	wg   *sync.WaitGroup
-	Init func()
+	wg     *sync.WaitGroup
+	Init   func()
+	isInit bool
 }
 
 var initChaCha sync.WaitGroup
 var initAES128 sync.WaitGroup
 var initAES256 sync.WaitGroup
 
-var a, b, c bool
-
-//go:embed generated/pk.bits
-var pkChaChaEmbedded []byte
-
-//go:embed generated/pk.aes128
-var pkAES128Embedded []byte
-
-//go:embed generated/pk.aes256
-var pkAES256Embedded []byte
+const (
+	ChaChaHash = "500d19eeccee0b3749e369c1839a1de0183dc7e8e43c4f9ad36e9c4b6537f03e"
+	AES128Hash = "5c4053dc1a731b5dcd059ca9e1753b018f8713ff4838504a2232f2d4cf5e0526"
+	AES256Hash = "0c0c06a3dbfe1f155a8b191b0d6ea081aae6e74cd77de3acc1d487094b3cab31"
+)
 
 var InitChaChaFunc = sync.OnceFunc(func() {
 	fmt.Println("loading ChaCha20")
 	defer initChaCha.Done()
 
-	pkChaCha := groth16.NewProvingKey(ecc.BN254)
-	_, err := pkChaCha.ReadFrom(bytes.NewBuffer(pkChaChaEmbedded))
+	pkChaCha, err := fetchKey("pk.bits", ChaChaHash)
 	if err != nil {
+		fmt.Println("failed to fetch key")
 		panic(err)
 	}
+
 	provers["chacha20"].Prover = &ChaChaProver{
 		r1cs: GetR1CS("chacha20"),
 		pk:   pkChaCha,
 	}
-	a = true
+
+	provers["chacha20"].isInit = true
 })
 
 var InitAES128Func = sync.OnceFunc(func() {
 	fmt.Println("loading AES128")
 	defer initAES128.Done()
 
-	pkAES128 := groth16.NewProvingKey(ecc.BN254)
-	_, err := pkAES128.ReadFrom(bytes.NewBuffer(pkAES128Embedded))
+	pkAES128, err := fetchKey("pk.aes128", AES128Hash)
 	if err != nil {
+		fmt.Println("failed to fetch key")
 		panic(err)
 	}
 
@@ -99,16 +107,16 @@ var InitAES128Func = sync.OnceFunc(func() {
 		r1cs: GetR1CS("aes-128-ctr"),
 		pk:   pkAES128,
 	}
-	b = true
+	provers["aes-128-ctr"].isInit = true
 })
 
 var InitAES256Func = sync.OnceFunc(func() {
 	fmt.Println("loading AES256")
 	defer initAES256.Done()
 
-	pkAES256 := groth16.NewProvingKey(ecc.BN254)
-	_, err := pkAES256.ReadFrom(bytes.NewBuffer(pkAES256Embedded))
+	pkAES256, err := fetchKey("pk.aes256", AES256Hash)
 	if err != nil {
+		fmt.Println("failed to fetch key")
 		panic(err)
 	}
 
@@ -116,13 +124,50 @@ var InitAES256Func = sync.OnceFunc(func() {
 		r1cs: GetR1CS("aes-256-ctr"),
 		pk:   pkAES256,
 	}
-	c = true
+	provers["aes-256-ctr"].isInit = true
 })
 
 var provers = map[string]*ProverParams{
 	"chacha20":    {wg: &initChaCha},
 	"aes-128-ctr": {wg: &initAES128},
 	"aes-256-ctr": {wg: &initAES256},
+}
+
+func fetchKey(keyName string, keyHashStr string) (groth16.ProvingKey, error) {
+	client := &http.Client{Timeout: fetchTimeout}
+	keyUrl := fmt.Sprintf("%s/%s", serverURL, keyName)
+	resp, err := client.Get(keyUrl)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching key: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %v", err)
+	}
+
+	bodyHash := sha256.Sum256(body)
+	keyHash := mustHex(keyHashStr)
+
+	if subtle.ConstantTimeCompare(bodyHash[:], keyHash) != 1 {
+		return nil, fmt.Errorf("invalid key hash")
+	}
+
+	pkey := groth16.NewProvingKey(ecc.BN254)
+	_, err = pkey.ReadFrom(bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("error reading proving key: %v", err)
+	}
+	return pkey, nil
+}
+
+func initDone() bool {
+	return provers["chacha20"].isInit && provers["aes-128-ctr"].isInit && provers["aes-256-ctr"].isInit
 }
 
 func init() {
@@ -135,14 +180,17 @@ func init() {
 	provers["aes-256-ctr"].Init = InitAES256Func
 }
 
-func initDone() bool {
-	return a && b && c
-}
-
 var InitFunc = sync.OnceFunc(func() {
-	go InitChaChaFunc()
-	go InitAES128Func()
-	go InitAES256Func()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// we want them loaded consecutively if over network
+		InitChaChaFunc()
+		InitAES128Func()
+		InitAES256Func()
+	}()
+	wg.Wait()
 })
 
 func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
@@ -219,4 +267,12 @@ func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
 	} else {
 		panic("could not find prover " + cipherParams.Cipher)
 	}
+}
+
+func mustHex(s string) []byte {
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
