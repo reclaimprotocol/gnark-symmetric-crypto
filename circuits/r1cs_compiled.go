@@ -1,4 +1,4 @@
-//go:build compiled
+//go:build !downloaded
 
 package circuits
 
@@ -68,7 +68,7 @@ var circuitCompilers = map[string]R1CSCompiler{
 }
 
 func GetR1CS(cipher string) constraint.ConstraintSystem {
-	fmt.Printf("Compiling R1CS %s\n", cipher)
+	fmt.Printf("Compiling circuit for %s\n", cipher)
 	compiler := circuitCompilers[cipher]
 	if compiler == nil {
 		panic("unknown compiler")
