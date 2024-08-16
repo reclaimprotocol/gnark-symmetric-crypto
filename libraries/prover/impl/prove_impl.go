@@ -74,7 +74,13 @@ func init() {
 	zerolog.SetGlobalLevel(zerolog.Disabled)
 }
 
-func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) bool {
+func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) (res bool) {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+			res = false
+		}
+	}()
 	if alg, ok := algorithmNames[algorithmID]; ok {
 		proverParams := provers[alg]
 		if proverParams.initDone {
@@ -101,7 +107,8 @@ func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) bool {
 			r1cs = groth16.NewCS(ecc.BN254)
 			_, err = r1cs.ReadFrom(bytes.NewBuffer(r1csData))
 			if err != nil {
-				panic(err)
+				fmt.Println(fmt.Errorf("error reading r1cs: %v", err))
+				return false
 			}
 
 			inHash = sha256.Sum256(r1csData)
