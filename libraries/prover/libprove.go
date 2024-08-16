@@ -17,7 +17,12 @@ func enforce_binding() {}
 
 //export Init
 func Init() {
-	go impl.InitFunc()
+	// do nothing
+}
+
+//export InitAlgorithm
+func InitAlgorithm(algorithmID uint8, provingKey []byte, r1cs []byte) bool {
+	return impl.InitAlgorithm(algorithmID, provingKey, r1cs)
 }
 
 //export InitComplete
