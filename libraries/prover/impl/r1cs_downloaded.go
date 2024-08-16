@@ -1,18 +1,12 @@
-//go:build download_circuits
-
 package impl
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"crypto/subtle"
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark/backend/groth16"
-	"github.com/consensys/gnark/constraint"
+	"time"
 )
 
 var circuits = map[string]string{
@@ -27,8 +21,14 @@ var circuitHashes = map[string]string{
 	"r1cs.aes256": "9fc93c79c0656e95f1f6d573380edba22e07c9a97e2d876d86115cb04a5cf4cd",
 }
 
-func fetchR1CS(keyName string) ([]byte, error) {
+const (
+	serverURL    = "https://gnark-assets.s3.ap-south-1.amazonaws.com"
+	fetchTimeout = 30 * time.Second
+)
+
+func FetchR1CS(keyName string) ([]byte, error) {
 	client := &http.Client{Timeout: fetchTimeout}
+	fmt.Printf("fetching R1CS %s\n", keyName)
 	resp, err := client.Get(fmt.Sprintf("%s/%s", serverURL, keyName))
 	if err != nil {
 		return nil, fmt.Errorf("error fetching R1CS: %v", err)
@@ -54,10 +54,10 @@ func fetchR1CS(keyName string) ([]byte, error) {
 	return body, nil
 }
 
-func GetR1CS(cipher string) constraint.ConstraintSystem {
+/*func DownloadR1CS(cipher string) constraint.ConstraintSystem {
 	fmt.Printf("Fetching R1CS for %s\n", cipher)
 
-	r1csData, err := fetchR1CS(circuits[cipher])
+	r1csData, err := FetchR1CS(circuits[cipher])
 	if err != nil {
 		panic(fmt.Errorf("failed to fetch R1CS for %s: %v", cipher, err))
 	}
@@ -68,4 +68,4 @@ func GetR1CS(cipher string) constraint.ConstraintSystem {
 		panic(err)
 	}
 	return r1cs
-}
+}*/

@@ -30,7 +30,7 @@ type ChaChaCircuit struct {
 	Out     [16 * BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 }
 
-func (c *ChaChaCircuit) Define(api frontend.API) error {
+func (c *ChaChaCircuit) Define(_ frontend.API) error {
 	return nil
 }
 
@@ -42,25 +42,45 @@ type AESWrapper struct {
 	Ciphertext [BLOCKS * 16]frontend.Variable `gnark:",public"`
 }
 
-func (circuit *AESWrapper) Define(api frontend.API) error {
+func (circuit *AESWrapper) Define(_ frontend.API) error {
 	return nil
 }
 
-type Prover interface {
-	ProveChaCha(key [][]uint8, nonce [][]uint8, counter []uint8, plaintext [][]uint8) (proof []byte, ciphertext []uint8)
-	ProveAES(key []uint8, nonce []uint8, counter []uint8, plaintext []uint8) (proof []byte, ciphertext []uint8)
+type InputParamsChaCha struct {
+	Cipher  string    `json:"cipher"`
+	Key     [][]uint8 `json:"key"`
+	Nonce   [][]uint8 `json:"nonce"`
+	Counter []uint8   `json:"counter"`
+	Input   [][]uint8 `json:"input"`
 }
 
-type ChaChaProver struct {
+type InputParamsAES struct {
+	Cipher  string  `json:"cipher"`
+	Key     []uint8 `json:"key"`
+	Nonce   []uint8 `json:"nonce"`
+	Counter []uint8 `json:"counter"`
+	Input   []uint8 `json:"input"`
+}
+
+type Prover interface {
+	SetParams(r1cs constraint.ConstraintSystem, pk groth16.ProvingKey)
+	Prove(params []byte) (proof []byte, ciphertext []uint8)
+}
+
+type baseProver struct {
 	r1cs constraint.ConstraintSystem
 	pk   groth16.ProvingKey
 }
 
-func (cp *ChaChaProver) ProveAES(_ []uint8, _ []uint8, _ []uint8, _ []uint8) (proof []byte, ciphertext []uint8) {
-	panic("not implemented")
+type ChaChaProver struct {
+	baseProver
 }
 
-func (cp *ChaChaProver) ProveChaCha(key [][]uint8, nonce [][]uint8, counter []uint8, plaintext [][]uint8) (proof []byte, ct []uint8) {
+func (cp *ChaChaProver) SetParams(r1cs constraint.ConstraintSystem, pk groth16.ProvingKey) {
+	cp.r1cs = r1cs
+	cp.pk = pk
+}
+func (cp *ChaChaProver) proveChaCha(key [][]uint8, nonce [][]uint8, counter []uint8, plaintext [][]uint8) (proof []byte, ct []uint8) {
 
 	if len(key) != 8 {
 		log.Panicf("key length must be 32: %d", len(key))
@@ -150,16 +170,24 @@ func (cp *ChaChaProver) ProveChaCha(key [][]uint8, nonce [][]uint8, counter []ui
 	}
 	return buf.Bytes(), ct
 }
+func (cp *ChaChaProver) Prove(params []byte) (proof []byte, ciphertext []uint8) {
+	var inputParams *InputParamsChaCha
+	err := json.Unmarshal(params, &inputParams)
+	if err != nil {
+		panic(err)
+	}
+	return cp.proveChaCha(inputParams.Key, inputParams.Nonce, inputParams.Counter, inputParams.Input)
+}
 
 type AESProver struct {
-	r1cs constraint.ConstraintSystem
-	pk   groth16.ProvingKey
+	baseProver
 }
 
-func (ap *AESProver) ProveChaCha(_ [][]uint8, _ [][]uint8, _ []uint8, _ [][]uint8) (proof []byte, ciphertext []uint8) {
-	panic("not implemented")
+func (ap *AESProver) SetParams(r1cs constraint.ConstraintSystem, pk groth16.ProvingKey) {
+	ap.r1cs = r1cs
+	ap.pk = pk
 }
-func (ap *AESProver) ProveAES(key []uint8, nonce []uint8, counter []uint8, plaintext []uint8) (proof []byte, ct []uint8) {
+func (ap *AESProver) proveAES(key []uint8, nonce []uint8, counter []uint8, plaintext []uint8) (proof []byte, ct []uint8) {
 
 	if len(key) != 256 && len(key) != 128 {
 		log.Panicf("key length must be 16 or 32: %d", len(key))
@@ -247,4 +275,12 @@ func (ap *AESProver) ProveAES(key []uint8, nonce []uint8, counter []uint8, plain
 	}
 
 	return bProofs, utils.BytesToBitsBE(bytes.Join(ciphertexts, nil))
+}
+func (ap *AESProver) Prove(params []byte) (proof []byte, ciphertext []uint8) {
+	var inputParams *InputParamsAES
+	err := json.Unmarshal(params, &inputParams)
+	if err != nil {
+		panic(err)
+	}
+	return ap.proveAES(inputParams.Key, inputParams.Nonce, inputParams.Counter, inputParams.Input)
 }
