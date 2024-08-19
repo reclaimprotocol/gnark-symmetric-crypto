@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"unsafe"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -139,6 +140,7 @@ func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
 			}
 			proofRes, resLen = C.CBytes(bRes), len(bRes)
 		}
+		runtime.GC()
 	}()
 
 	var cipherParams *InputParamsCipher

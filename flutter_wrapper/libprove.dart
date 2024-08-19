@@ -33,23 +33,6 @@ class NativeLibrary {
   late final _Free =
       _FreePtr.asFunction<void Function(ffi.Pointer<ffi.Uint8>)>();
 
-  void Init() {
-    return _Init();
-  }
-
-  late final _InitPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function()>>('Init');
-  late final _Init = _InitPtr.asFunction<void Function()>();
-
-
-  int InitComplete() {
-    return _InitComplete();
-  }
-
-  late final _InitCompletePtr =
-  _lookup<ffi.NativeFunction<ffi.Uint8 Function()>>('InitComplete');
-  late final _InitComplete = _InitCompletePtr.asFunction<int Function()>();
-
   Prove_return Prove(
     GoSlice params
   ) {
