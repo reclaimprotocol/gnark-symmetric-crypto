@@ -10,7 +10,6 @@ import (
 
 	"gnark-symmetric-crypto/utils"
 	"log"
-	"sync"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -209,13 +208,13 @@ func (ap *AESProver) proveAES(key []uint8, nonce []uint8, counter []uint8, plain
 	bCounter := utils.BitsToBytesBE(counter)
 	nCounter := binary.BigEndian.Uint32(bCounter)
 
-	wg := sync.WaitGroup{}
-	wg.Add(4)
+	// wg := sync.WaitGroup{}
+	// wg.Add(4)
 
 	// split plaintext into 4 blocks and prove them separately
 	for ciphertextChunk := 0; ciphertextChunk < 4; ciphertextChunk++ {
-		go func(chunk int) {
-			defer wg.Done()
+		func(chunk int) {
+			// defer wg.Done()
 			// calculate ciphertext ourselves
 			block, err := aes.NewCipher(bKey)
 			if err != nil {
@@ -267,7 +266,7 @@ func (ap *AESProver) proveAES(key []uint8, nonce []uint8, counter []uint8, plain
 		}(ciphertextChunk)
 	}
 
-	wg.Wait()
+	// wg.Wait()
 
 	bProofs, err := json.Marshal(proofs)
 	if err != nil {
