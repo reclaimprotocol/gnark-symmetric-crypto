@@ -49,18 +49,6 @@ func (aes *AESGadget) VariableXor(a frontend.Variable, b frontend.Variable, size
 	return aes.api.FromBinary(x...)
 }
 
-func (aes *AESGadget) XorByte(a frontend.Variable, bitsB []frontend.Variable) frontend.Variable {
-	if len(bitsB) != 8 {
-		panic("invalid byte len")
-	}
-	bitsA := aes.api.ToBinary(a, 8)
-	x := make([]frontend.Variable, 8)
-	for i := 0; i < 8; i++ {
-		x[i] = aes.api.Xor(bitsA[i], bitsB[i])
-	}
-	return aes.api.FromBinary(x...)
-}
-
 func (aes *AESGadget) XorSubWords(a, b, c, d frontend.Variable, xk []frontend.Variable) []frontend.Variable {
 
 	aa := aes.Subw(T[0], a)
@@ -85,12 +73,20 @@ func (aes *AESGadget) XorSubWords(a, b, c, d frontend.Variable, xk []frontend.Va
 		t[i] = aes.api.Xor(t[i], t4[i])
 	}
 
-	newState := make([]frontend.Variable, 4)
-	newState[0] = aes.api.FromBinary(t[:8]...)
-	newState[1] = aes.api.FromBinary(t[8:16]...)
-	newState[2] = aes.api.FromBinary(t[16:24]...)
-	newState[3] = aes.api.FromBinary(t[24:32]...)
-	return newState
+	newWord := make([]frontend.Variable, 4)
+	newWord[0] = aes.api.FromBinary(t[:8]...)
+	newWord[1] = aes.api.FromBinary(t[8:16]...)
+	newWord[2] = aes.api.FromBinary(t[16:24]...)
+	newWord[3] = aes.api.FromBinary(t[24:32]...)
+	return newWord
+}
+
+func (aes *AESGadget) ShiftSub(state [16]frontend.Variable) []frontend.Variable {
+	t := make([]frontend.Variable, 16)
+	for i := 0; i < 16; i++ {
+		t[i] = aes.Subw(aes.sbox0, state[byte_order[i]])
+	}
+	return t
 }
 
 // substitute word with naive lookup of sbox

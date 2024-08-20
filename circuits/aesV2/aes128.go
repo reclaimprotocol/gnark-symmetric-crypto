@@ -90,29 +90,7 @@ func (aes *AES128) Encrypt(key []frontend.Variable, pt [16]frontend.Variable) [1
 		copy(state[12:16], t3)
 	}
 
-	state[0] = aes.Subw(aes.sbox0, state[0])
-	state[4] = aes.Subw(aes.sbox0, state[4])
-	state[8] = aes.Subw(aes.sbox0, state[8])
-	state[12] = aes.Subw(aes.sbox0, state[12])
-
-	tmp := aes.Subw(aes.sbox0, state[1])
-	state[1] = aes.Subw(aes.sbox0, state[5])
-	state[5] = aes.Subw(aes.sbox0, state[9])
-	state[9] = aes.Subw(aes.sbox0, state[13])
-	state[13] = tmp
-
-	tmp = aes.Subw(aes.sbox0, state[10])
-	state[10] = aes.Subw(aes.sbox0, state[2])
-	state[2] = tmp
-	tmp = aes.Subw(aes.sbox0, state[14])
-	state[14] = aes.Subw(aes.sbox0, state[6])
-	state[6] = tmp
-
-	tmp = aes.Subw(aes.sbox0, state[15])
-	state[15] = aes.Subw(aes.sbox0, state[11])
-	state[11] = aes.Subw(aes.sbox0, state[7])
-	state[7] = aes.Subw(aes.sbox0, state[3])
-	state[3] = tmp
+	copy(state[:], aes.ShiftSub(state))
 
 	k := 10 * 16
 
