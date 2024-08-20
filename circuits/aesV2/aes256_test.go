@@ -18,12 +18,10 @@ package aes_v2
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend"
-	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/test"
@@ -88,14 +86,5 @@ func TestCompile256(t *testing.T) {
 	}
 
 	fmt.Printf("constraints: %d\n", r1css.GetNbConstraints())
-
-	pk1, _, err := groth16.Setup(r1css)
-	if err != nil {
-		panic(err)
-	}
-
-	f2, err := os.OpenFile("pk.aes256", os.O_RDWR|os.O_CREATE, 0777)
-	pk1.WriteTo(f2)
-	f2.Close()
 
 }

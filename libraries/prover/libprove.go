@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"gnark-symmetric-crypto/libraries/prover/impl"
 	"unsafe"
 )
@@ -26,6 +28,20 @@ func Free(pointer unsafe.Pointer) {
 }
 
 //export Prove
-func Prove(params []byte) (unsafe.Pointer, int) {
-	return impl.Prove(params)
+func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
+
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+			bRes, er := json.Marshal(err)
+			if er != nil {
+				fmt.Println(er)
+			} else {
+				proofRes, resLen = C.CBytes(bRes), len(bRes)
+			}
+		}
+	}()
+
+	res := impl.Prove(params)
+	return C.CBytes(res), len(res)
 }

@@ -7,18 +7,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"runtime"
-	"unsafe"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/constraint"
 	"github.com/rs/zerolog"
-)
-
-// #include <stdlib.h>
-import (
-	"C"
 )
 
 const (
@@ -130,18 +123,7 @@ func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) (res b
 	return false
 }
 
-func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
-	defer func() {
-		if err := recover(); err != nil {
-			fmt.Println(err)
-			bRes, er := json.Marshal(err)
-			if er != nil {
-				fmt.Println(er)
-			}
-			proofRes, resLen = C.CBytes(bRes), len(bRes)
-		}
-		runtime.GC()
-	}()
+func Prove(params []byte) []byte {
 
 	var cipherParams *InputParamsCipher
 	err := json.Unmarshal(params, &cipherParams)
@@ -169,7 +151,7 @@ func Prove(params []byte) (proofRes unsafe.Pointer, resLen int) {
 		if er != nil {
 			panic(er)
 		}
-		return C.CBytes(res), len(res)
+		return res
 
 	} else {
 		panic("could not find prover " + cipherParams.Cipher)
