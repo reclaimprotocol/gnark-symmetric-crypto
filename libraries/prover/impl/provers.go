@@ -20,6 +20,7 @@ import (
 
 const BITS_PER_WORD = 32
 const BLOCKS = 1
+const AES_BLOCKS = 4
 
 type ChaChaCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
@@ -37,8 +38,8 @@ type AESWrapper struct {
 	Key        []frontend.Variable
 	Nonce      [12]frontend.Variable
 	Counter    frontend.Variable
-	Plaintext  [BLOCKS * 16]frontend.Variable `gnark:",public"`
-	Ciphertext [BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Plaintext  [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Ciphertext [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
 }
 
 func (circuit *AESWrapper) Define(_ frontend.API) error {
@@ -198,8 +199,6 @@ func (ap *AESProver) proveAES(key []uint8, nonce []uint8, counter []uint8, plain
 		log.Panicf("plaintext length must be 64: %d", len(plaintext))
 	}
 
-	proofs := make([][]byte, 4)
-	ciphertexts := make([][]byte, 4)
 	bKey := utils.BitsToBytesBE(key)
 	bNonce := utils.BitsToBytesBE(nonce)
 
@@ -208,72 +207,50 @@ func (ap *AESProver) proveAES(key []uint8, nonce []uint8, counter []uint8, plain
 	bCounter := utils.BitsToBytesBE(counter)
 	nCounter := binary.BigEndian.Uint32(bCounter)
 
-	// wg := sync.WaitGroup{}
-	// wg.Add(4)
-
-	// split plaintext into 4 blocks and prove them separately
-	for ciphertextChunk := 0; ciphertextChunk < 4; ciphertextChunk++ {
-		func(chunk int) {
-			// defer wg.Done()
-			// calculate ciphertext ourselves
-			block, err := aes.NewCipher(bKey)
-			if err != nil {
-				panic(err)
-			}
-
-			bPlaintextChunk := bPlaintext[chunk*16 : chunk*16+16]
-			bCiphertextChunk := make([]byte, len(bPlaintextChunk))
-
-			ctr := cipher.NewCTR(block, append(bNonce, binary.BigEndian.AppendUint32(nil, nCounter+uint32(chunk))...))
-			ctr.XORKeyStream(bCiphertextChunk, bPlaintextChunk)
-
-			circuit := &AESWrapper{
-				Key: make([]frontend.Variable, len(bKey)),
-			}
-
-			circuit.Counter = nCounter + uint32(chunk)
-			for i := 0; i < len(bKey); i++ {
-				circuit.Key[i] = bKey[i]
-			}
-			for i := 0; i < len(bNonce); i++ {
-				circuit.Nonce[i] = bNonce[i]
-			}
-			for i := 0; i < len(bPlaintextChunk); i++ {
-				circuit.Plaintext[i] = bPlaintextChunk[i]
-			}
-
-			for i := 0; i < len(bCiphertextChunk); i++ {
-				circuit.Ciphertext[i] = bCiphertextChunk[i]
-			}
-
-			wtns, err := frontend.NewWitness(circuit, ecc.BN254.ScalarField())
-			if err != nil {
-				panic(err)
-			}
-			gProof, err := groth16.Prove(ap.r1cs, ap.pk, wtns)
-			if err != nil {
-				panic(err)
-			}
-			buf := &bytes.Buffer{}
-			_, err = gProof.WriteTo(buf)
-			if err != nil {
-				panic(err)
-			}
-
-			ciphertexts[chunk] = bCiphertextChunk
-			proofs[chunk] = buf.Bytes()
-
-		}(ciphertextChunk)
-	}
-
-	// wg.Wait()
-
-	bProofs, err := json.Marshal(proofs)
+	block, err := aes.NewCipher(bKey)
 	if err != nil {
 		panic(err)
 	}
 
-	return bProofs, utils.BytesToBitsBE(bytes.Join(ciphertexts, nil))
+	bCiphertext := make([]byte, len(bPlaintext))
+
+	ctr := cipher.NewCTR(block, append(bNonce, binary.BigEndian.AppendUint32(nil, nCounter)...))
+	ctr.XORKeyStream(bCiphertext, bPlaintext)
+
+	circuit := &AESWrapper{
+		Key: make([]frontend.Variable, len(bKey)),
+	}
+
+	circuit.Counter = nCounter
+	for i := 0; i < len(bKey); i++ {
+		circuit.Key[i] = bKey[i]
+	}
+	for i := 0; i < len(bNonce); i++ {
+		circuit.Nonce[i] = bNonce[i]
+	}
+	for i := 0; i < len(bPlaintext); i++ {
+		circuit.Plaintext[i] = bPlaintext[i]
+	}
+
+	for i := 0; i < len(bCiphertext); i++ {
+		circuit.Ciphertext[i] = bCiphertext[i]
+	}
+
+	wtns, err := frontend.NewWitness(circuit, ecc.BN254.ScalarField())
+	if err != nil {
+		panic(err)
+	}
+	gProof, err := groth16.Prove(ap.r1cs, ap.pk, wtns)
+	if err != nil {
+		panic(err)
+	}
+	buf := &bytes.Buffer{}
+	_, err = gProof.WriteTo(buf)
+	if err != nil {
+		panic(err)
+	}
+
+	return buf.Bytes(), utils.BytesToBitsBE(bCiphertext)
 }
 func (ap *AESProver) Prove(params []byte) (proof []byte, ciphertext []uint8) {
 	var inputParams *InputParamsAES

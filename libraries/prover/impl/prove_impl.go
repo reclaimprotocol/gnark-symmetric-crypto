@@ -33,13 +33,13 @@ var provers = map[string]*ProverParams{
 		Prover:      &ChaChaProver{},
 	},
 	"aes-128-ctr": {
-		KeyHash:     "5c4053dc1a731b5dcd059ca9e1753b018f8713ff4838504a2232f2d4cf5e0526",
-		CircuitHash: "b849a7b157921280e73f28716a097acc524b43ac133a98d8bb434c1072118f02",
+		KeyHash:     "9dea83ebb87923ccb0870a75bc21c341498d2df396a76e6f54eafb4cc331d9e0",
+		CircuitHash: "f51412818e9df3d556c8de879e637bcaf65c41a79d677aa1a81be4df779ddb60",
 		Prover:      &AESProver{},
 	},
 	"aes-256-ctr": {
-		KeyHash:     "0c0c06a3dbfe1f155a8b191b0d6ea081aae6e74cd77de3acc1d487094b3cab31",
-		CircuitHash: "9fc93c79c0656e95f1f6d573380edba22e07c9a97e2d876d86115cb04a5cf4cd",
+		KeyHash:     "069a556d171c434fd957dc07262c771f8cd34c300142844344a5b32a6e7873aa",
+		CircuitHash: "f8a27dc46c40748052d0efcd90dbc38ec82a92e7dad99f3874dc65330c806fa6",
 		Prover:      &AESProver{},
 	},
 }

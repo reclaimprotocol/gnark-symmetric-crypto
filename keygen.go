@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
-	aes2 "gnark-symmetric-crypto/circuits/aes"
+	aes2 "gnark-symmetric-crypto/circuits/aesV2"
 	"gnark-symmetric-crypto/circuits/chacha"
 	"gnark-symmetric-crypto/circuits/chachaV3"
 	"time"
@@ -58,7 +58,7 @@ func main() {
 	// trySerialize()
 
 	// generateChaCha()
-	generateChaChaV3()
+	// generateChaChaV3()
 	generateAES128()
 	generateAES256()
 }

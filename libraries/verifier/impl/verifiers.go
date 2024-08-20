@@ -2,10 +2,8 @@ package impl
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"gnark-symmetric-crypto/utils"
-	"sync"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -25,7 +23,7 @@ func (c *ChaChaCircuit) Define(_ frontend.API) error {
 	return nil
 }
 
-const AES_BLOCKS = 1
+const AES_BLOCKS = 4
 
 type AESWrapper struct {
 	Plaintext  [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
@@ -94,56 +92,29 @@ func (av *AESVerifier) Verify(bProof []byte, publicSignals []uint8) bool {
 	ciphertext := utils.BitsToBytesBE(publicSignals[:len(publicSignals)/2])
 	plaintext := utils.BitsToBytesBE(publicSignals[len(publicSignals)/2:])
 
-	var proofs [][]byte
-	er := json.Unmarshal(bProof, &proofs)
-	if er != nil {
-		fmt.Println(er)
+	witness := &AESWrapper{}
+	for i := 0; i < len(plaintext); i++ {
+		witness.Plaintext[i] = plaintext[i]
+		witness.Ciphertext[i] = ciphertext[i]
+	}
+
+	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
+	if err != nil {
+		fmt.Println(err)
 		return false
 	}
 
-	numProofs := len(proofs)
-	ptLen := len(plaintext) / numProofs
-	results := make([]bool, numProofs)
-
-	wg := sync.WaitGroup{}
-	wg.Add(numProofs)
-
-	for i := 0; i < numProofs; i++ {
-		go func(chunk int) {
-			defer wg.Done()
-			witness := &AESWrapper{}
-			for j := 0; j < ptLen; j++ {
-				witness.Plaintext[j] = plaintext[chunk*ptLen+j]
-				witness.Ciphertext[j] = ciphertext[chunk*ptLen+j]
-			}
-
-			wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-
-			gProof := groth16.NewProof(ecc.BN254)
-			_, err = gProof.ReadFrom(bytes.NewBuffer(proofs[chunk]))
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			err = groth16.Verify(gProof, av.vk, wtns)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			results[chunk] = true
-		}(i)
+	gProof := groth16.NewProof(ecc.BN254)
+	_, err = gProof.ReadFrom(bytes.NewBuffer(bProof))
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+	err = groth16.Verify(gProof, av.vk, wtns)
+	if err != nil {
+		fmt.Println(err)
+		return false
 	}
 
-	wg.Wait()
-
-	res := true
-	for i := 0; i < len(results); i++ {
-		res = res && results[i]
-	}
-
-	return res
+	return true
 }

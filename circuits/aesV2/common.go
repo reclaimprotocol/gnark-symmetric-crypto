@@ -5,7 +5,7 @@ import (
 	"github.com/consensys/gnark/std/lookup/logderivlookup"
 )
 
-const BLOCKS = 1
+const BLOCKS = 4
 
 type AESWrapper struct {
 	Key        []frontend.Variable
