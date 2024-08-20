@@ -17,9 +17,7 @@ limitations under the License.
 package aes_v2
 
 import (
-	"fmt"
 	"math"
-	"math/big"
 
 	"github.com/consensys/gnark/frontend"
 )
@@ -132,10 +130,10 @@ func (aes *AES128) ExpandKey(key []frontend.Variable) [176]frontend.Variable {
 			t0, t1, t2, t3 = t1, t2, t3, t0
 
 			// subwords
-			t0 = aes.Subw(aes.sbox0, t0)
-			t1 = aes.Subw(aes.sbox0, t1)
-			t2 = aes.Subw(aes.sbox0, t2)
-			t3 = aes.Subw(aes.sbox0, t3)
+			t0 = aes.Subw(aes.sbox, t0)
+			t1 = aes.Subw(aes.sbox, t1)
+			t2 = aes.Subw(aes.sbox, t2)
+			t3 = aes.Subw(aes.sbox, t3)
 			t0 = aes.VariableXor(t0, aes.RCon[i/16], 8)
 		}
 
@@ -148,24 +146,4 @@ func (aes *AES128) ExpandKey(key []frontend.Variable) [176]frontend.Variable {
 	}
 
 	return expand
-}
-
-func BeUint32(b []byte) uint32 {
-	_ = b[3] // bounds check hint to compiler; see golang.org/issue/14808
-	return uint32(b[3]) | uint32(b[2])<<8 | uint32(b[1])<<16 | uint32(b[0])<<24
-}
-
-func printState(state [16]frontend.Variable) {
-	for i := 0; i < 4; i++ {
-		printWord(state[i*4 : i*4+4])
-	}
-}
-
-func printWord(ww []frontend.Variable) {
-	w := make([]byte, 4)
-	for j := 0; j < 4; j++ {
-		v := (ww[j]).(*big.Int)
-		w[j] = byte(v.Uint64())
-	}
-	fmt.Printf("%0.4X\n", BeUint32(w))
 }

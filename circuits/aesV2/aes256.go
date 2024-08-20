@@ -115,20 +115,20 @@ func (aes *AES256) ExpandKey(key []frontend.Variable) [AES_256_KS_WORDS * 4]fron
 			t0, t1, t2, t3 = t1, t2, t3, t0
 
 			// subwords
-			t0 = aes.Subw(aes.sbox0, t0)
-			t1 = aes.Subw(aes.sbox0, t1)
-			t2 = aes.Subw(aes.sbox0, t2)
-			t3 = aes.Subw(aes.sbox0, t3)
+			t0 = aes.Subw(aes.sbox, t0)
+			t1 = aes.Subw(aes.sbox, t1)
+			t2 = aes.Subw(aes.sbox, t2)
+			t3 = aes.Subw(aes.sbox, t3)
 
 			t0 = aes.VariableXor(t0, aes.RCon[i/AES_256_KEY_SIZE_BYTES], 8)
 		}
 
 		if i%AES_256_KEY_SIZE_BYTES == 16 {
 			// subwords
-			t0 = aes.Subw(aes.sbox0, t0)
-			t1 = aes.Subw(aes.sbox0, t1)
-			t2 = aes.Subw(aes.sbox0, t2)
-			t3 = aes.Subw(aes.sbox0, t3)
+			t0 = aes.Subw(aes.sbox, t0)
+			t1 = aes.Subw(aes.sbox, t1)
+			t2 = aes.Subw(aes.sbox, t2)
+			t3 = aes.Subw(aes.sbox, t3)
 
 		}
 

@@ -2,6 +2,7 @@ package aes_v2
 
 import (
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/lookup/logderivlookup"
 )
 
 const BLOCKS = 1
@@ -15,25 +16,38 @@ type AESWrapper struct {
 }
 
 type AESGadget struct {
-	api   frontend.API
-	sbox0 [256]frontend.Variable
-	RCon  [11]frontend.Variable
-	t     [4][256]frontend.Variable
+	api            frontend.API
+	sbox           *logderivlookup.Table
+	RCon           [11]frontend.Variable
+	t0, t1, t2, t3 *logderivlookup.Table
 }
 
 // retuns AESGadget instance which can be used inside a circuit
 func NewAESGadget(api frontend.API) AESGadget {
 
+	t0 := logderivlookup.New(api)
+	t1 := logderivlookup.New(api)
+	t2 := logderivlookup.New(api)
+	t3 := logderivlookup.New(api)
+	sbox := logderivlookup.New(api)
+	for i := 0; i < 256; i++ {
+		t0.Insert(T[0][i])
+		t1.Insert(T[1][i])
+		t2.Insert(T[2][i])
+		t3.Insert(T[3][i])
+		sbox.Insert(sbox0[i])
+	}
+
 	RCon := [11]frontend.Variable{0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36}
 
-	return AESGadget{api: api, sbox0: sbox0, RCon: RCon, t: T}
+	return AESGadget{api: api, sbox: sbox, RCon: RCon, t0: t0, t1: t1, t2: t2, t3: t3}
 }
 
 // aes128 encrypt function
 func (aes *AESGadget) SubBytes(state [16]frontend.Variable) [16]frontend.Variable {
 	var newState [16]frontend.Variable
 	for i := 0; i < 16; i++ {
-		newState[i] = aes.Subw(aes.sbox0, state[i])
+		newState[i] = aes.Subw(aes.sbox, state[i])
 	}
 	return newState
 }
@@ -51,10 +65,10 @@ func (aes *AESGadget) VariableXor(a frontend.Variable, b frontend.Variable, size
 
 func (aes *AESGadget) XorSubWords(a, b, c, d frontend.Variable, xk []frontend.Variable) []frontend.Variable {
 
-	aa := aes.Subw(T[0], a)
-	bb := aes.Subw(T[1], b)
-	cc := aes.Subw(T[2], c)
-	dd := aes.Subw(T[3], d)
+	aa := aes.Subw(aes.t0, a)
+	bb := aes.Subw(aes.t1, b)
+	cc := aes.Subw(aes.t2, c)
+	dd := aes.Subw(aes.t3, d)
 
 	t0 := aes.api.ToBinary(aa, 32)
 	t1 := aes.api.ToBinary(bb, 32)
@@ -84,18 +98,14 @@ func (aes *AESGadget) XorSubWords(a, b, c, d frontend.Variable, xk []frontend.Va
 func (aes *AESGadget) ShiftSub(state [16]frontend.Variable) []frontend.Variable {
 	t := make([]frontend.Variable, 16)
 	for i := 0; i < 16; i++ {
-		t[i] = aes.Subw(aes.sbox0, state[byte_order[i]])
+		t[i] = aes.Subw(aes.sbox, state[byte_order[i]])
 	}
 	return t
 }
 
 // substitute word with naive lookup of sbox
-func (aes *AESGadget) Subw(sbox [256]frontend.Variable, a frontend.Variable) frontend.Variable {
-	out := frontend.Variable(0)
-	for j := 0; j < 256; j++ {
-		out = aes.api.Add(out, aes.api.Mul(aes.api.IsZero(aes.api.Sub(a, j)), sbox[j])) // api.Cmp instead of api.Sub works but is inefficient
-	}
-	return out
+func (aes *AESGadget) Subw(sbox *logderivlookup.Table, a frontend.Variable) frontend.Variable {
+	return sbox.Lookup(a)[0]
 }
 
 func (aes *AESGadget) createIV(counter frontend.Variable, iv []frontend.Variable) {
