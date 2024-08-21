@@ -6,13 +6,16 @@ import (
 	aes2 "gnark-symmetric-crypto/circuits/aesV2"
 	"gnark-symmetric-crypto/circuits/chacha"
 	"gnark-symmetric-crypto/circuits/chachaV3"
+	prover "gnark-symmetric-crypto/libraries/prover/impl"
+	"runtime"
 	"time"
 
-	// _ "embed"
 	"fmt"
 	"os"
 
 	"gnark-symmetric-crypto/utils"
+
+	// _ "net/http/pprof"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -43,24 +46,31 @@ func (c *Witness) Define(api frontend.API) error {
 
 func main() {
 
+	prover.InitAlgorithm(prover.AES_128, fetchFile("pk.aes128"), fetchFile("r1cs.aes128"))
+
 	/*go func() {
 		http.ListenAndServe("localhost:8088", nil)
-	}()*/
-	/*time.Sleep(time.Second * 10)
-	for i := 0; i < 10; i++ {
-		err := ProveG16()
-		if err != nil {
-			log.Fatal("groth16 error:", err)
+	}()
+	time.Sleep(time.Second * 3)*/
+	params := `{"cipher":"aes-128-ctr","key":[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"nonce":[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"counter":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],"input":[0,0,1,1,1,0,1,1,0,0,1,0,1,1,1,1,0,1,0,0,0,0,0,1,0,1,0,0,1,0,0,0,0,1,1,1,0,0,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,0,0,0,1,0,1,1,1,1,0,0,0,0,0,1,1,1,1,1,0,1,1,1,1,1,0,1,0,0,1,0,0,0,1,0,0,1,1,0,1,0,0,1,1,0,1,1,0,0,0,0,0,1,1,0,1,1,0,1,1,0,1,1,0,1,0,0,1,0,0,0,0,0,1,0,1,1,1,0,0,1,0,1,1,1,1,1,0,1,1,1,0,0,0,0,0,1,0,1,1,0,0,1,0,1,0,0,1,0,0,0,1,0,1,0,0,1,1,0,1,1,0,0,1,0,0,1,1,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,1,0,0,1,0,0,1,1,1,1,0,0,0,1,1,1,0,1,1,1,1,0,1,1,1,1,0,1,0,0,1,1,0,0,0,1,0,1,0,0,1,0,0,0,1,0,0,0,0,1,0,0,1,0,0,1,0,0,0,1,0,1,1,0,0,0,0,0,0,0,0,1,0,1,0,0,1,1,0,1,0,0,1,1,0,1,0,0,0,1,0,1,1,1,1,0,0,0,1,0,1,0,0,1,0,1,1,0,1,0,0,1,1,1,0,1,0,0,1,1,0,0,0,0,0,1,0,1,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,1,0,1,0,0,0,0,0,0,1,0,1,0,0,1,1,0,1,1,0,0,1,1,1,1,0,0,1,0,0,1,0,1,1,1,1,0,1,1,1,0,1,0,1,1,0,1,1,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}`
+	t := time.Now()
+	for i := 1; i < 1001; i++ {
+		prover.Prove([]byte(params))
+		if i%100 == 0 {
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+			fmt.Printf("%-4d HeapAlloc = %6vkb Sys = %8vkb NumGC = %4v took %s\n", i, m.HeapAlloc/1024, m.Sys/1024, m.NumGC, time.Now().Sub(t))
+			t = time.Now()
 		}
 	}
-	time.Sleep(time.Second * 1000)*/
+	// time.Sleep(time.Minute * 1000)
 	// generateGroth16()
 	// trySerialize()
 
 	// generateChaCha()
 	// generateChaChaV3()
-	generateAES128()
-	generateAES256()
+	// generateAES128()
+	// generateAES256()
 }
 
 // var r1css = groth16.NewCS(ecc.BN254)
@@ -419,4 +429,12 @@ func generateAES256() {
 	f3, err := os.OpenFile("libraries/verifier/impl/generated/vk.aes256", os.O_RDWR|os.O_CREATE, 0777)
 	vk1.WriteTo(f3)
 	f3.Close()
+}
+
+func fetchFile(keyName string) []byte {
+	f, err := os.ReadFile("circuits/generated/" + keyName)
+	if err != nil {
+		panic(err)
+	}
+	return f
 }

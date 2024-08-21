@@ -124,7 +124,7 @@ func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) (res b
 }
 
 func Prove(params []byte) []byte {
-
+	// defer runtime.GC()
 	var cipherParams *InputParamsCipher
 	err := json.Unmarshal(params, &cipherParams)
 	if err != nil {
