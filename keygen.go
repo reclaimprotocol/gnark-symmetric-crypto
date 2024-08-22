@@ -6,8 +6,6 @@ import (
 	aes2 "gnark-symmetric-crypto/circuits/aesV2"
 	"gnark-symmetric-crypto/circuits/chacha"
 	"gnark-symmetric-crypto/circuits/chachaV3"
-	prover "gnark-symmetric-crypto/libraries/prover/impl"
-	"runtime"
 	"time"
 
 	"fmt"
@@ -45,13 +43,13 @@ func (c *Witness) Define(api frontend.API) error {
 }
 
 func main() {
-
-	prover.InitAlgorithm(prover.AES_128, fetchFile("pk.aes128"), fetchFile("r1cs.aes128"))
-
 	/*go func() {
 		http.ListenAndServe("localhost:8088", nil)
 	}()
 	time.Sleep(time.Second * 3)*/
+	/*prover.InitAlgorithm(prover.AES_128, fetchFile("pk.aes128"), fetchFile("r1cs.aes128"))
+
+
 	params := `{"cipher":"aes-128-ctr","key":[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"nonce":[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"counter":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],"input":[0,0,1,1,1,0,1,1,0,0,1,0,1,1,1,1,0,1,0,0,0,0,0,1,0,1,0,0,1,0,0,0,0,1,1,1,0,0,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,0,0,0,1,0,1,1,1,1,0,0,0,0,0,1,1,1,1,1,0,1,1,1,1,1,0,1,0,0,1,0,0,0,1,0,0,1,1,0,1,0,0,1,1,0,1,1,0,0,0,0,0,1,1,0,1,1,0,1,1,0,1,1,0,1,0,0,1,0,0,0,0,0,1,0,1,1,1,0,0,1,0,1,1,1,1,1,0,1,1,1,0,0,0,0,0,1,0,1,1,0,0,1,0,1,0,0,1,0,0,0,1,0,1,0,0,1,1,0,1,1,0,0,1,0,0,1,1,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,1,0,0,1,0,0,1,1,1,1,0,0,0,1,1,1,0,1,1,1,1,0,1,1,1,1,0,1,0,0,1,1,0,0,0,1,0,1,0,0,1,0,0,0,1,0,0,0,0,1,0,0,1,0,0,1,0,0,0,1,0,1,1,0,0,0,0,0,0,0,0,1,0,1,0,0,1,1,0,1,0,0,1,1,0,1,0,0,0,1,0,1,1,1,1,0,0,0,1,0,1,0,0,1,0,1,1,0,1,0,0,1,1,1,0,1,0,0,1,1,0,0,0,0,0,1,0,1,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,1,0,1,0,0,0,0,0,0,1,0,1,0,0,1,1,0,1,1,0,0,1,1,1,1,0,0,1,0,0,1,0,1,1,1,1,0,1,1,1,0,1,0,1,1,0,1,1,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}`
 	t := time.Now()
 	for i := 1; i < 1001; i++ {
@@ -62,15 +60,15 @@ func main() {
 			fmt.Printf("%-4d HeapAlloc = %6vkb Sys = %8vkb NumGC = %4v took %s\n", i, m.HeapAlloc/1024, m.Sys/1024, m.NumGC, time.Now().Sub(t))
 			t = time.Now()
 		}
-	}
+	}*/
 	// time.Sleep(time.Minute * 1000)
 	// generateGroth16()
 	// trySerialize()
 
 	// generateChaCha()
-	// generateChaChaV3()
-	// generateAES128()
-	// generateAES256()
+	generateChaChaV3()
+	generateAES128()
+	generateAES256()
 }
 
 // var r1css = groth16.NewCS(ecc.BN254)
@@ -332,10 +330,10 @@ func generateChaChaV3() {
 
 	fmt.Printf("Blocks: %d, constraints: %d\n", chachaV3.Blocks, r1css.GetNbConstraints())
 
-	os.Remove("circuits/generated/r1cs.bits")
-	os.Remove("circuits/generated/pk.bits")
-	os.Remove("libraries/verifier/impl/generated/vk.bits")
-	f, err := os.OpenFile("circuits/generated/r1cs.bits", os.O_RDWR|os.O_CREATE, 0777)
+	os.Remove("circuits/generated/r1cs.chacha20")
+	os.Remove("circuits/generated/pk.chacha20")
+	os.Remove("libraries/verifier/impl/generated/vk.chacha20")
+	f, err := os.OpenFile("circuits/generated/r1cs.chacha20", os.O_RDWR|os.O_CREATE, 0777)
 	r1css.WriteTo(f)
 	f.Close()
 
@@ -344,11 +342,11 @@ func generateChaChaV3() {
 		panic(err)
 	}
 
-	f2, err := os.OpenFile("circuits/generated/pk.bits", os.O_RDWR|os.O_CREATE, 0777)
+	f2, err := os.OpenFile("circuits/generated/pk.chacha20", os.O_RDWR|os.O_CREATE, 0777)
 	pk1.WriteTo(f2)
 	f2.Close()
 
-	f3, err := os.OpenFile("libraries/verifier/impl/generated/vk.bits", os.O_RDWR|os.O_CREATE, 0777)
+	f3, err := os.OpenFile("libraries/verifier/impl/generated/vk.chacha20", os.O_RDWR|os.O_CREATE, 0777)
 	vk1.WriteTo(f3)
 	f3.Close()
 }

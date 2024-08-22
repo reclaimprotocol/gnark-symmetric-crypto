@@ -22,7 +22,7 @@ type InputVerifyParams struct {
 
 var verifiers = make(map[string]Verifier)
 
-//go:embed generated/vk.bits
+//go:embed generated/vk.chacha20
 var vkChachaEmbedded []byte
 
 //go:embed generated/vk.aes128

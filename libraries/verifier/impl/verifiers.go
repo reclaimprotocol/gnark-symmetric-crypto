@@ -45,6 +45,7 @@ type ChachaVerifier struct {
 func (cv *ChachaVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 
 	if len(publicSignals) != 1024 {
+		fmt.Printf("public signals must be 1024 signals, not %d\n", len(publicSignals))
 		return false
 	}
 

@@ -3,8 +3,8 @@ module gnark-symmetric-crypto
 go 1.21
 
 require (
-	github.com/consensys/gnark v0.10.1-0.20240719112245-02ff590778c6
-	github.com/consensys/gnark-crypto v0.13.0
+	github.com/consensys/gnark v0.10.1-0.20240822094023-afda68a38acc
+	github.com/consensys/gnark-crypto v0.13.1-0.20240802214859-ff4c0ddbe1ef
 	github.com/rs/zerolog v1.33.0
 	golang.org/x/crypto v0.25.0
 )

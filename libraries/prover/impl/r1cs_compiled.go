@@ -4,7 +4,7 @@ package impl
 
 import (
 	"fmt"
-	"gnark-symmetric-crypto/circuits/aes"
+	aes "gnark-symmetric-crypto/circuits/aesV2"
 	"gnark-symmetric-crypto/circuits/chachaV3"
 
 	"github.com/consensys/gnark-crypto/ecc"
