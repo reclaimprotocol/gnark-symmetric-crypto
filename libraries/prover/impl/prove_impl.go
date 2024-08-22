@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"runtime"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -125,7 +124,6 @@ func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) (res b
 }
 
 func Prove(params []byte) []byte {
-	defer runtime.GC()
 	var cipherParams *InputParamsCipher
 	err := json.Unmarshal(params, &cipherParams)
 	if err != nil {
