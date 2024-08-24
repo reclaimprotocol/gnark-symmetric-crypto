@@ -6,4 +6,4 @@ test:
   before_script:
     - go mod download && go mod verify
   script:
-    - go test ./...
+    - go test ./... -v
