@@ -129,11 +129,10 @@ func (aes *AES128) ExpandKey(key []frontend.Variable) [176]frontend.Variable {
 			// rotation
 			t0, t1, t2, t3 = t1, t2, t3, t0
 
-			// subwords
-			t0 = aes.Subw(aes.sbox, t0)
-			t1 = aes.Subw(aes.sbox, t1)
-			t2 = aes.Subw(aes.sbox, t2)
-			t3 = aes.Subw(aes.sbox, t3)
+			// sub words
+			tt := aes.Subws(aes.sbox, t0, t1, t2, t3)
+			t0, t1, t2, t3 = tt[0], tt[1], tt[2], tt[3]
+
 			t0 = aes.VariableXor(t0, aes.RCon[i/16], 8)
 		}
 

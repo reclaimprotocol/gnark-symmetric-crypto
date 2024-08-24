@@ -25,7 +25,6 @@ import (
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/test"
@@ -80,7 +79,15 @@ func TestAES128(t *testing.T) {
 		assignment.Nonce[i] = nonceAssign[i]
 	}
 
-	assert.CheckCircuit(&assignment, test.WithValidAssignment(&assignment), test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254))
+	assert.CheckCircuit(&AES128Wrapper{
+		AESWrapper{
+			Key:        make([]frontend.Variable, 16),
+			Counter:    Counter,
+			Nonce:      [12]frontend.Variable{},
+			Plaintext:  [BLOCKS * 16]frontend.Variable{},
+			Ciphertext: [BLOCKS * 16]frontend.Variable{},
+		},
+	}, test.WithValidAssignment(&assignment))
 }
 
 func StrToIntSlice(inputData string, hexRepresentation bool) []int {

@@ -44,12 +44,14 @@ func NewAESGadget(api frontend.API) AESGadget {
 }
 
 // aes128 encrypt function
-func (aes *AESGadget) SubBytes(state [16]frontend.Variable) [16]frontend.Variable {
-	var newState [16]frontend.Variable
+func (aes *AESGadget) SubBytes(state [16]frontend.Variable) (res [16]frontend.Variable) {
+	/*var newState [16]frontend.Variable
 	for i := 0; i < 16; i++ {
 		newState[i] = aes.Subw(aes.sbox, state[i])
-	}
-	return newState
+	}*/
+	t := aes.Subws(aes.sbox, state[:]...)
+	copy(res[:], t)
+	return res
 }
 
 // xor on bits of two frontend.Variables
@@ -65,10 +67,10 @@ func (aes *AESGadget) VariableXor(a frontend.Variable, b frontend.Variable, size
 
 func (aes *AESGadget) XorSubWords(a, b, c, d frontend.Variable, xk []frontend.Variable) []frontend.Variable {
 
-	aa := aes.Subw(aes.t0, a)
-	bb := aes.Subw(aes.t1, b)
-	cc := aes.Subw(aes.t2, c)
-	dd := aes.Subw(aes.t3, d)
+	aa := aes.t0.Lookup(a)[0]
+	bb := aes.t1.Lookup(b)[0]
+	cc := aes.t2.Lookup(c)[0]
+	dd := aes.t3.Lookup(d)[0]
 
 	t0 := aes.api.ToBinary(aa, 32)
 	t1 := aes.api.ToBinary(bb, 32)
@@ -98,14 +100,14 @@ func (aes *AESGadget) XorSubWords(a, b, c, d frontend.Variable, xk []frontend.Va
 func (aes *AESGadget) ShiftSub(state [16]frontend.Variable) []frontend.Variable {
 	t := make([]frontend.Variable, 16)
 	for i := 0; i < 16; i++ {
-		t[i] = aes.Subw(aes.sbox, state[byte_order[i]])
+		t[i] = state[byte_order[i]]
 	}
-	return t
+	return aes.Subws(aes.sbox, t...)
 }
 
 // substitute word with naive lookup of sbox
-func (aes *AESGadget) Subw(sbox *logderivlookup.Table, a frontend.Variable) frontend.Variable {
-	return sbox.Lookup(a)[0]
+func (aes *AESGadget) Subws(sbox *logderivlookup.Table, a ...frontend.Variable) []frontend.Variable {
+	return sbox.Lookup(a...)
 }
 
 func (aes *AESGadget) createIV(counter frontend.Variable, iv []frontend.Variable) {

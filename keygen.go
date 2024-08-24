@@ -3,10 +3,6 @@ package main
 import (
 	aes2 "gnark-symmetric-crypto/circuits/aesV2"
 	"gnark-symmetric-crypto/circuits/chachaV3"
-	prover "gnark-symmetric-crypto/libraries/prover/impl"
-	"log"
-	"runtime"
-	"runtime/pprof"
 	"time"
 
 	"fmt"
@@ -44,7 +40,7 @@ func main() {
 	}()
 	time.Sleep(time.Second * 3)*/
 
-	f, err := os.Create("default.pgo")
+	/*f, err := os.Create("default.pgo")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -72,12 +68,12 @@ func main() {
 			fmt.Printf("%-5d HeapAlloc = %6vkb Sys = %12vb objs = %6v NumGC = %4v took %s\n", i, m.HeapAlloc/1024, m.Sys, m.Mallocs-m.Frees, m.NumGC, time.Now().Sub(t))
 			t = time.Now()
 		}
-	}
+	}*/
 	// time.Sleep(time.Minute * 1000)
 
-	// generateChaChaV3()
-	// generateAES128()
-	// generateAES256()
+	generateChaChaV3()
+	generateAES128()
+	generateAES256()
 }
 
 // var r1css = groth16.NewCS(ecc.BN254)

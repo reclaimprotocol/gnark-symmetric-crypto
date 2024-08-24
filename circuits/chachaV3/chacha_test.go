@@ -62,7 +62,7 @@ func TestQR(t *testing.T) {
 	err := test.IsSolved(&qrBlock{}, &witness, ecc.BN254.ScalarField())
 	assert.NoError(err)
 
-	assert.CheckCircuit(&qrBlock{}, test.WithCurves(ecc.BN254))
+	assert.CheckCircuit(&qrBlock{}, test.WithValidAssignment(&witness))
 
 }
 
@@ -115,7 +115,7 @@ func TestRound(t *testing.T) {
 	err := test.IsSolved(&roundCircuit{}, &witness, ecc.BN254.ScalarField())
 	assert.NoError(err)
 
-	assert.CheckCircuit(&roundCircuit{}, test.WithCurves(ecc.BN254))
+	assert.CheckCircuit(&roundCircuit{}, test.WithValidAssignment(&witness))
 }
 
 func TestCipher(t *testing.T) {
@@ -176,5 +176,5 @@ func TestCipher(t *testing.T) {
 	err = test.IsSolved(&ChaChaCircuit{}, &witness, ecc.BN254.ScalarField())
 	assert.NoError(err)
 
-	assert.CheckCircuit(&ChaChaCircuit{}, test.WithCurves(ecc.BN254))
+	assert.CheckCircuit(&ChaChaCircuit{}, test.WithValidAssignment(&witness))
 }
