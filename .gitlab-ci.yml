@@ -4,7 +4,6 @@ test:
   stage: test
   image: golang:latest
   before_script:
-    - git config --global url."https://git-push-pull:$GL_TOKEN@gitlab.reclaimprotocol.org".insteadOf "https://gitlab.reclaimprotocol.org"
     - go mod download && go mod verify
   script:
     - go test ./...
