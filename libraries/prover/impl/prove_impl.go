@@ -28,18 +28,18 @@ var algorithmNames = map[uint8]string{
 
 var provers = map[string]*ProverParams{
 	"chacha20": {
-		KeyHash:     "78c14595e60e2054cbcee1c465d3863d166d3c667ef2743d9e7f18afee2b3629",
-		CircuitHash: "1ee90d87e5262923f0db0efe473a368a9c4bebdea0ddebe196e2d8363a538502",
+		KeyHash:     "e609f370a46ba5e7cbe192fc5c44e402eea00e76d235568c0079d7f1e36727e4",
+		CircuitHash: "64193c545bfc4ea3e52af66beb05a02551337520ddd2a25e08b0b224730afae3",
 		Prover:      &ChaChaProver{},
 	},
 	"aes-128-ctr": {
-		KeyHash:     "2cd331f090336cf3a3bca4448749882a755d717b2611c80d61874f531b87bce6",
-		CircuitHash: "0a4cbc377a275b68842a85151853187dd3047b58611df5f95bcfe88d696c71e4",
+		KeyHash:     "632015cc2db4fbdb89b3395a5812a8e89e7f56bb0b702468e5ae0852a2fcd402",
+		CircuitHash: "5f5c5748f35aea83eaac49b2b7f01b6e3cef842b4b4564961e60442873142265",
 		Prover:      &AESProver{},
 	},
 	"aes-256-ctr": {
-		KeyHash:     "43b285c33f4f0b6ef0e002618f1acdc2a45fcc893d3a91a5470a9d4117bab207",
-		CircuitHash: "956737c28a6964aa9444107329cf26a575bebc09e4e2a0d6b355ccc5e87afc91",
+		KeyHash:     "5461d6bb5ec52fe8ddc8f2d9ae92f71561defc2d697f71801981edd4707e0519",
+		CircuitHash: "ba7cd2f17886cd68017e317887a3fc4743fa51daf2e932d8d9905b54c15abf95",
 		Prover:      &AESProver{},
 	},
 }
