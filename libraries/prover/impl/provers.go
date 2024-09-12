@@ -6,8 +6,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
-	"encoding/json"
-
 	"gnark-symmetric-crypto/utils"
 	"log"
 
@@ -15,8 +13,13 @@ import (
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std"
 	"golang.org/x/crypto/chacha20"
 )
+
+func init() {
+	std.RegisterHints()
+}
 
 const BITS_PER_WORD = 32
 const BLOCKS = 1
@@ -46,25 +49,17 @@ func (circuit *AESWrapper) Define(_ frontend.API) error {
 	return nil
 }
 
-type InputParamsChaCha struct {
-	Cipher  string    `json:"cipher"`
-	Key     [][]uint8 `json:"key"`
-	Nonce   [][]uint8 `json:"nonce"`
-	Counter []uint8   `json:"counter"`
-	Input   [][]uint8 `json:"input"`
-}
-
-type InputParamsAES struct {
+type InputParams struct {
 	Cipher  string  `json:"cipher"`
 	Key     []uint8 `json:"key"`
 	Nonce   []uint8 `json:"nonce"`
-	Counter []uint8 `json:"counter"`
+	Counter uint32  `json:"counter"`
 	Input   []uint8 `json:"input"`
 }
 
 type Prover interface {
 	SetParams(r1cs constraint.ConstraintSystem, pk groth16.ProvingKey)
-	Prove(params []byte) (proof []byte, ciphertext []uint8)
+	Prove(params *InputParams) (proof []byte, ciphertext []uint8)
 }
 
 type baseProver struct {
@@ -80,78 +75,68 @@ func (cp *ChaChaProver) SetParams(r1cs constraint.ConstraintSystem, pk groth16.P
 	cp.r1cs = r1cs
 	cp.pk = pk
 }
-func (cp *ChaChaProver) proveChaCha(key [][]uint8, nonce [][]uint8, counter []uint8, plaintext [][]uint8) (proof []byte, ct []uint8) {
+func (cp *ChaChaProver) proveChaCha(key []uint8, nonce []uint8, counter uint32, plaintext []uint8) (proof []byte, ct []uint8) {
 
-	if len(key) != 8 {
+	if len(key) != 32 {
 		log.Panicf("key length must be 32: %d", len(key))
 	}
-	if len(nonce) != 3 {
+	if len(nonce) != 12 {
 		log.Panicf("nonce length must be 12: %d", len(nonce))
 	}
-	if len(plaintext) != 16 {
+	if len(plaintext) != 64 {
 		log.Panicf("plaintext length must be 64: %d", len(plaintext))
 	}
 
 	// calculate ciphertext ourselves
 
-	bKey := utils.BitsToBytesLE(key)
-	bNonce := utils.BitsToBytesLE(nonce)
+	ct = make([]byte, len(plaintext))
 
-	bPlaintext := utils.BitsToBytesLE(plaintext)
-	bCiphertext := make([]byte, len(bPlaintext))
-
-	ctr, err := chacha20.NewUnauthenticatedCipher(bKey, bNonce)
+	ctr, err := chacha20.NewUnauthenticatedCipher(key, nonce)
 	if err != nil {
 		panic(err)
 	}
 
-	bCounter := utils.BitsToBytes32LE(counter)
-	nCounter := binary.LittleEndian.Uint32(bCounter)
+	ctr.SetCounter(counter)
+	ctr.XORKeyStream(ct, plaintext)
 
-	ctr.SetCounter(nCounter)
-	ctr.XORKeyStream(bCiphertext, bPlaintext)
+	// convert input values to bits preserving byte order
 
-	uciphertext := utils.BytesToUint32BERaw(bCiphertext)
-	ciphertext := utils.UintsToBits(uciphertext)
+	// plaintext & ciphertext are in BE order
+	bPlaintext := utils.BytesToUint32BEBits(plaintext)
+	bCiphertext := utils.BytesToUint32BEBits(ct)
 
-	ct = make([]uint8, len(ciphertext)*32)
-	// convert to LE for compatibility with witness-sdk
-	for i := 0; i < len(ciphertext); i++ {
-		for j := 0; j < 4; j++ {
-			for k := 0; k < 8; k++ {
-				bit := uint8((ciphertext[i][j*8+(7-k)]).(uint))
-				ct[i*32+j*8+k] = bit
-			}
-		}
-	}
+	// everything else in LE order
+	bKey := utils.BytesToUint32LEBits(key)
+	bNonce := utils.BytesToUint32LEBits(nonce)
+	bCounter := utils.Uint32ToBits(counter)
 
 	witness := &ChaChaCircuit{}
 
 	for i := 0; i < len(witness.Key); i++ {
 		for j := 0; j < len(witness.Key[i]); j++ {
-			witness.Key[i][j] = key[i][31-j]
+			witness.Key[i][j] = bKey[i][j]
 		}
 	}
 
 	for i := 0; i < len(witness.Nonce); i++ {
 		for j := 0; j < len(witness.Nonce[i]); j++ {
-			witness.Nonce[i][j] = nonce[i][31-j]
+			witness.Nonce[i][j] = bNonce[i][j]
 		}
 	}
 
 	for i := 0; i < len(witness.Counter); i++ {
-		witness.Counter[i] = counter[31-i]
+		witness.Counter[i] = bCounter[i]
 	}
 
 	for i := 0; i < len(witness.In); i++ {
 		for j := 0; j < len(witness.In[i]); j++ {
-			witness.In[i][j] = plaintext[i][(j/8)*8+(7-j%8)]
+			witness.In[i][j] = bPlaintext[i][j]
 		}
 	}
 
 	for i := 0; i < len(witness.Out); i++ {
 		for j := 0; j < len(witness.Out[i]); j++ {
-			witness.Out[i][j] = ciphertext[i][j]
+			witness.Out[i][j] = bCiphertext[i][j]
 		}
 	}
 
@@ -170,13 +155,9 @@ func (cp *ChaChaProver) proveChaCha(key [][]uint8, nonce [][]uint8, counter []ui
 	}
 	return buf.Bytes(), ct
 }
-func (cp *ChaChaProver) Prove(params []byte) (proof []byte, ciphertext []uint8) {
-	var inputParams *InputParamsChaCha
-	err := json.Unmarshal(params, &inputParams)
-	if err != nil {
-		panic(err)
-	}
-	return cp.proveChaCha(inputParams.Key, inputParams.Nonce, inputParams.Counter, inputParams.Input)
+func (cp *ChaChaProver) Prove(params *InputParams) (proof []byte, ciphertext []uint8) {
+
+	return cp.proveChaCha(params.Key, params.Nonce, params.Counter, params.Input)
 }
 
 type AESProver struct {
@@ -187,53 +168,44 @@ func (ap *AESProver) SetParams(r1cs constraint.ConstraintSystem, pk groth16.Prov
 	ap.r1cs = r1cs
 	ap.pk = pk
 }
-func (ap *AESProver) proveAES(key []uint8, nonce []uint8, counter []uint8, plaintext []uint8) (proof []byte, ct []uint8) {
+func (ap *AESProver) proveAES(key []uint8, nonce []uint8, counter uint32, plaintext []uint8) (proof []byte, ct []uint8) {
 
-	if len(key) != 256 && len(key) != 128 {
+	if len(key) != 32 && len(key) != 16 {
 		log.Panicf("key length must be 16 or 32: %d", len(key))
 	}
-	if len(nonce) != 96 {
+	if len(nonce) != 12 {
 		log.Panicf("nonce length must be 12: %d", len(nonce))
 	}
-	if len(plaintext) != 512 {
+	if len(plaintext) != 64 {
 		log.Panicf("plaintext length must be 64: %d", len(plaintext))
 	}
 
-	bKey := utils.BitsToBytesBE(key)
-	bNonce := utils.BitsToBytesBE(nonce)
-
-	bPlaintext := utils.BitsToBytesBE(plaintext)
-
-	bCounter := utils.BitsToBytesBE(counter)
-	nCounter := binary.BigEndian.Uint32(bCounter)
-
-	block, err := aes.NewCipher(bKey)
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		panic(err)
 	}
 
-	bCiphertext := make([]byte, len(bPlaintext))
+	ciphertext := make([]byte, len(plaintext))
 
-	ctr := cipher.NewCTR(block, append(bNonce, binary.BigEndian.AppendUint32(nil, nCounter)...))
-	ctr.XORKeyStream(bCiphertext, bPlaintext)
+	ctr := cipher.NewCTR(block, append(nonce, binary.BigEndian.AppendUint32(nil, counter)...))
+	ctr.XORKeyStream(ciphertext, plaintext)
 
 	circuit := &AESWrapper{
-		Key: make([]frontend.Variable, len(bKey)),
+		Key: make([]frontend.Variable, len(key)),
 	}
 
-	circuit.Counter = nCounter
-	for i := 0; i < len(bKey); i++ {
-		circuit.Key[i] = bKey[i]
+	circuit.Counter = counter
+	for i := 0; i < len(key); i++ {
+		circuit.Key[i] = key[i]
 	}
-	for i := 0; i < len(bNonce); i++ {
-		circuit.Nonce[i] = bNonce[i]
+	for i := 0; i < len(nonce); i++ {
+		circuit.Nonce[i] = nonce[i]
 	}
-	for i := 0; i < len(bPlaintext); i++ {
-		circuit.Plaintext[i] = bPlaintext[i]
+	for i := 0; i < len(plaintext); i++ {
+		circuit.Plaintext[i] = plaintext[i]
 	}
-
-	for i := 0; i < len(bCiphertext); i++ {
-		circuit.Ciphertext[i] = bCiphertext[i]
+	for i := 0; i < len(ciphertext); i++ {
+		circuit.Ciphertext[i] = ciphertext[i]
 	}
 
 	wtns, err := frontend.NewWitness(circuit, ecc.BN254.ScalarField())
@@ -250,13 +222,8 @@ func (ap *AESProver) proveAES(key []uint8, nonce []uint8, counter []uint8, plain
 		panic(err)
 	}
 
-	return buf.Bytes(), utils.BytesToBitsBE(bCiphertext)
+	return buf.Bytes(), ciphertext
 }
-func (ap *AESProver) Prove(params []byte) (proof []byte, ciphertext []uint8) {
-	var inputParams *InputParamsAES
-	err := json.Unmarshal(params, &inputParams)
-	if err != nil {
-		panic(err)
-	}
-	return ap.proveAES(inputParams.Key, inputParams.Nonce, inputParams.Counter, inputParams.Input)
+func (ap *AESProver) Prove(params *InputParams) (proof []byte, ciphertext []uint8) {
+	return ap.proveAES(params.Key, params.Nonce, params.Counter, params.Input)
 }

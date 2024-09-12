@@ -4,7 +4,6 @@ import "C"
 import (
 	"bytes"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -16,7 +15,7 @@ import (
 
 type InputVerifyParams struct {
 	Cipher        string  `json:"cipher"`
-	Proof         string  `json:"proof"`
+	Proof         []uint8 `json:"proof"`
 	PublicSignals []uint8 `json:"publicSignals"`
 }
 
@@ -77,15 +76,7 @@ func Verify(params []byte) (res bool) {
 	}
 
 	if verifier, ok := verifiers[inputParams.Cipher]; ok {
-		return verifier.Verify(mustHex(inputParams.Proof), inputParams.PublicSignals)
+		return verifier.Verify(inputParams.Proof, inputParams.PublicSignals)
 	}
 	return false
-}
-
-func mustHex(s string) []byte {
-	res, err := hex.DecodeString(s)
-	if err != nil {
-		panic(err)
-	}
-	return res
 }

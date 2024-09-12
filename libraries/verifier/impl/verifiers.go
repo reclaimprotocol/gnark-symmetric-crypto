@@ -44,20 +44,22 @@ type ChachaVerifier struct {
 
 func (cv *ChachaVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 
-	if len(publicSignals) != 1024 {
-		fmt.Printf("public signals must be 1024 signals, not %d\n", len(publicSignals))
+	if len(publicSignals) != 128 {
+		fmt.Printf("public signals must be 128 bytes, not %d\n", len(publicSignals))
 		return false
 	}
 
 	witness := &ChaChaCircuit{}
 
-	ciphertext := publicSignals[:len(publicSignals)/2]
-	plaintext := publicSignals[len(publicSignals)/2:]
+	bSignals := utils.BytesToUint32BEBits(publicSignals)
+
+	ciphertext := bSignals[:len(bSignals)/2]
+	plaintext := bSignals[len(bSignals)/2:]
 
 	for i := 0; i < len(witness.In); i++ {
 		for j := 0; j < len(witness.In[i]); j++ {
-			witness.In[i][j] = plaintext[i*32+((j/8)*8+(7-j%8))]
-			witness.Out[i][j] = ciphertext[i*32+((j/8)*8+(7-j%8))]
+			witness.In[i][j] = plaintext[i][j]
+			witness.Out[i][j] = ciphertext[i][j]
 		}
 	}
 
@@ -86,12 +88,12 @@ type AESVerifier struct {
 
 func (av *AESVerifier) Verify(bProof []byte, publicSignals []uint8) bool {
 
-	if len(publicSignals) != 1024 {
+	if len(publicSignals) != 128 {
 		return false
 	}
 
-	ciphertext := utils.BitsToBytesBE(publicSignals[:len(publicSignals)/2])
-	plaintext := utils.BitsToBytesBE(publicSignals[len(publicSignals)/2:])
+	ciphertext := publicSignals[:len(publicSignals)/2]
+	plaintext := publicSignals[len(publicSignals)/2:]
 
 	witness := &AESWrapper{}
 	for i := 0; i < len(plaintext); i++ {

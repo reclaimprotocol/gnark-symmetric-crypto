@@ -44,17 +44,13 @@ var provers = map[string]*ProverParams{
 	},
 }
 
-type InputParamsCipher struct {
-	Cipher string `json:"cipher"`
-}
-
 type Proof struct {
-	ProofJson string `json:"proofJson"`
+	ProofJson []uint8 `json:"proofJson"`
 }
 
 type OutputParams struct {
-	Proof         Proof `json:"proof"`
-	PublicSignals []int `json:"publicSignals"`
+	Proof         Proof   `json:"proof"`
+	PublicSignals []uint8 `json:"publicSignals"`
 }
 
 type ProverParams struct {
@@ -97,23 +93,19 @@ func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) (res b
 		}
 
 		var r1cs constraint.ConstraintSystem
-		if len(r1csData) > 0 {
-			r1cs = groth16.NewCS(ecc.BN254)
-			_, err = r1cs.ReadFrom(bytes.NewBuffer(r1csData))
-			if err != nil {
-				fmt.Println(fmt.Errorf("error reading r1cs: %v", err))
-				return false
-			}
+		inHash = sha256.Sum256(r1csData)
+		circuitHash := mustHex(proverParams.CircuitHash)
 
-			inHash = sha256.Sum256(r1csData)
-			circuitHash := mustHex(proverParams.CircuitHash)
+		if subtle.ConstantTimeCompare(inHash[:], circuitHash) != 1 {
+			fmt.Println(fmt.Errorf("circuit hash mismatch"))
+			return false
+		}
 
-			if subtle.ConstantTimeCompare(inHash[:], circuitHash) != 1 {
-				fmt.Println(fmt.Errorf("circuit hash mismatch"))
-				return false
-			}
-		} else {
-			r1cs = GetR1CS(alg)
+		r1cs = groth16.NewCS(ecc.BN254)
+		_, err = r1cs.ReadFrom(bytes.NewBuffer(r1csData))
+		if err != nil {
+			fmt.Println(fmt.Errorf("error reading r1cs: %v", err))
+			return false
 		}
 
 		proverParams.SetParams(r1cs, pkey)
@@ -124,28 +116,23 @@ func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) (res b
 }
 
 func Prove(params []byte) []byte {
-	var cipherParams *InputParamsCipher
-	err := json.Unmarshal(params, &cipherParams)
+	var inputParams *InputParams
+	err := json.Unmarshal(params, &inputParams)
 	if err != nil {
 		panic(err)
 	}
-	if prover, ok := provers[cipherParams.Cipher]; ok {
+	if prover, ok := provers[inputParams.Cipher]; ok {
 
 		if !prover.initDone {
-			panic(fmt.Sprintf("proving params are not initialized for cipher: %s", cipherParams.Cipher))
+			panic(fmt.Sprintf("proving params are not initialized for cipher: %s", inputParams.Cipher))
 		}
-		proof, ciphertext := prover.Prove(params)
-
-		ct := make([]int, 0, len(ciphertext))
-		for i := 0; i < len(ciphertext); i++ {
-			ct = append(ct, int(ciphertext[i]))
-		}
+		proof, ciphertext := prover.Prove(inputParams)
 
 		res, er := json.Marshal(&OutputParams{
 			Proof: Proof{
-				ProofJson: hex.EncodeToString(proof),
+				ProofJson: proof,
 			},
-			PublicSignals: ct,
+			PublicSignals: ciphertext,
 		})
 		if er != nil {
 			panic(er)
@@ -153,7 +140,7 @@ func Prove(params []byte) []byte {
 		return res
 
 	} else {
-		panic("could not find prover " + cipherParams.Cipher)
+		panic("could not find prover for" + inputParams.Cipher)
 	}
 }
 
