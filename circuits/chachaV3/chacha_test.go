@@ -162,16 +162,13 @@ func TestCipher(t *testing.T) {
 	cipher.SetCounter(1)
 	cipher.XORKeyStream(bCt, bPt)
 
-	plaintext := utils.BytesToUint32BERaw(bPt)
-	ciphertext := utils.BytesToUint32BERaw(bCt)
-
 	witness := ChaChaCircuit{}
 
-	copy(witness.Key[:], utils.UintsToBits(utils.BytesToUint32LERaw(bKey)))
-	copy(witness.Nonce[:], utils.UintsToBits(utils.BytesToUint32LERaw(bNonce)))
+	copy(witness.Key[:], utils.BytesToUint32LEBits(bKey))
+	copy(witness.Nonce[:], utils.BytesToUint32LEBits(bNonce))
 	witness.Counter = utils.Uint32ToBits(counter)
-	copy(witness.In[:], utils.UintsToBits(plaintext))
-	copy(witness.Out[:], utils.UintsToBits(ciphertext))
+	copy(witness.In[:], utils.BytesToUint32BEBits(bPt))
+	copy(witness.Out[:], utils.BytesToUint32BEBits(bCt))
 
 	err = test.IsSolved(&ChaChaCircuit{}, &witness, ecc.BN254.ScalarField())
 	assert.NoError(err)

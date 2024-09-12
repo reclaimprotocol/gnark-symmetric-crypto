@@ -1,9 +1,9 @@
 package chachaV2
 
 import (
-	"testing"
-
+	"encoding/binary"
 	"gnark-symmetric-crypto/utils"
+	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
@@ -145,8 +145,8 @@ func TestCipher(t *testing.T) {
 	ciphertext := utils.BytesToUint32BERaw(bCt)
 
 	witness := ChaChaCircuit{}
-	copy(witness.Key[:], utils.BytesToUint32LERaw(bKey))
-	copy(witness.Nonce[:], utils.BytesToUint32LERaw(bNonce))
+	copy(witness.Key[:], BytesToUint32LERaw(bKey))
+	copy(witness.Nonce[:], BytesToUint32LERaw(bNonce))
 	witness.Counter = counter
 	copy(witness.In[:], plaintext)
 	copy(witness.Out[:], ciphertext)
@@ -155,4 +155,14 @@ func TestCipher(t *testing.T) {
 	assert.NoError(err)
 
 	assert.CheckCircuit(&ChaChaCircuit{}, test.WithValidAssignment(&witness))
+}
+
+func BytesToUint32LERaw(in []uint8) []frontend.Variable {
+
+	var res []frontend.Variable
+	for i := 0; i < len(in); i += 4 {
+		t := binary.LittleEndian.Uint32(in[i:])
+		res = append(res, t)
+	}
+	return res
 }
