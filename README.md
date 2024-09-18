@@ -22,6 +22,32 @@ These optimized versions provide the best balance of speed and resource usage fo
 [Prover library](libraries/prover) runs on Client side Android, IOS and Linux for generating proofs
 [Verifier library](libraries/verifier) runs on Server side Linux (X64 and ARM64) only for verifying proofs
 
+An example input to the library would be:
+```json
+{
+  "cipher": "chacha20",
+  "key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+  "nonce": "AwMDAwMDAwMDAwMD",
+  "counter": 3,
+  "input": "3w1sF8DskL0dfh4th6ONUvcPIiCvZVYoPUZw0B2Oo0Vv9GiuG4QJCSM/vyRT2HM0b9IcM03fkTPpSAEcozH59Q=="
+}
+```
+
+all binary fields are base64 encoded
+
+`input` is either plaintext or ciphertext, it does not matter with CTR mode
+
+An example output is:
+```json
+{
+  "proof": {
+    "proofJson": "3rJu6SuPFBPDaCLxUdkYnIIoX0rAPOZqj/COpmFPZCueaxhfSs+tY8AbJy1vh0xdTPE4wanvPkK6gVDGAZFUkwJqzjV2t3Fufxh509I4Nt0LxAK0f6vofjAf0SYkFQ2OqaQxQkPaKXJvVoi7KNClPg0WWYNPxpNesaOaZ2pXVBMAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  },
+  "publicSignals": "4R7wsubT5FCrGjUJwKaix57OE3aooKbAlgPyaxWxBt7mBxHXCcohrH5UX30sBA8boZM9Tv9II6FC2nqv+kgyJA=="
+}
+```
+
+where `publicSignals` is the corresponding plaintext or ciphertext
 ## Compile all circuits, generate proving and verification keys
 ```
 go run keygen.go
