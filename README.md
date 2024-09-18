@@ -4,8 +4,6 @@
     </div>
 </div>
 
-ChaCha20, AES-128-CTR AES-256-CTR implementations using [Gnark](https://github.com/Consensys/gnark)
-
 ## Circuits
 There are 3 circuits for Chacha ([v1](circuits/chacha), [v2](circuits/chachaV2), [v3](circuits/chachaV3))
 2 circuits for AES ([v1](circuits/aes), [v2](circuits/aesV2))
