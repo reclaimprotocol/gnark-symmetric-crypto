@@ -1,5 +1,8 @@
-# gnark-symmetric-crypto
-ChaCha20, AES-128-CTR AES-256-CTR implementations using [Gnark](https://github.com/Consensys/gnark)
+<div>
+    <div>
+        <img src="https://raw.githubusercontent.com/reclaimprotocol/.github/main/assets/banners/Gnark.png"  />
+    </div>
+</div>
 
 ## Circuits
 There are 3 circuits for Chacha ([v1](circuits/chacha), [v2](circuits/chachaV2), [v3](circuits/chachaV3))
