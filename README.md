@@ -1,19 +1,26 @@
-# gnark-zk
+# gnark-symmetric-crypto
 ChaCha20, AES-128-CTR AES-256-CTR implementations using [Gnark](https://github.com/Consensys/gnark)
 
 ## Circuits
 There are 3 circuits for Chacha ([v1](circuits/chacha), [v2](circuits/chachaV2), [v3](circuits/chachaV3))
 2 circuits for AES ([v1](circuits/aes), [v2](circuits/aesV2))
-V3 Chacha and V2 AES are the fastest. 
-Chacha V3 works with individual bits, gadgets seem to benefit on larger scale circuits
-AES V2 uses lookup tables instead of calculating transformations on the fly
+V3 ChaCha20 and V2 AES are the most efficient implementations:
+
+- ChaCha20 V3:
+  - Operates on individual bits
+  - Utilizes gadgets, which show improved performance in larger circuits
+  - Optimized for better overall performance
+
+- AES V2:
+  - Employs lookup tables for transformations
+  - Avoids on-the-fly calculations, resulting in faster execution
+  - Significantly improves efficiency compared to the previous version
+
+These optimized versions provide the best balance of speed and resource usage for their respective algorithms.
 
 ## Libraries
-[Prover library](libraries/prover) runs on Android, IOS and Linux
-[Verifier library](libraries/verifier) runs on Linux (X64 and ARM64) only
-
-## Usage
-An example dart wrapper can be found [here](flutter_wrapper/libprove.dart)
+[Prover library](libraries/prover) runs on Client side Android, IOS and Linux for generating proofs
+[Verifier library](libraries/verifier) runs on Server side Linux (X64 and ARM64) only for verifying proofs
 
 ## Compile all circuits, generate proving and verification keys
 ```

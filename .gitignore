@@ -22,3 +22,6 @@
 go.work
 
 .idea/
+
+# Ignore all .DS_Store files and folders
+**/.DS_Store
