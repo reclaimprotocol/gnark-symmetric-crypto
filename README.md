@@ -11,8 +11,7 @@ V3 ChaCha20 and V2 AES are the most efficient implementations:
 
 - ChaCha20 V3:
   - Operates on individual bits
-  - Utilizes gadgets, which show improved performance in larger circuits
-  - Optimized for better overall performance
+  - Optimized for smaller circuit size & better overall performance
 
 - AES V2:
   - Employs lookup tables for transformations
