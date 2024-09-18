@@ -1,4 +1,9 @@
-# gnark-zk
+<div>
+    <div>
+        <img src="https://raw.githubusercontent.com/reclaimprotocol/.github/main/assets/banners/Gnark.png"  />
+    </div>
+</div>
+
 ChaCha20, AES-128-CTR AES-256-CTR implementations using [Gnark](https://github.com/Consensys/gnark)
 
 ## Circuits
