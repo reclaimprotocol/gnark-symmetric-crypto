@@ -2,6 +2,8 @@ package impl
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -26,18 +28,18 @@ var algorithmNames = map[uint8]string{
 
 var provers = map[string]*ProverParams{
 	"chacha20": {
-		KeyHash:     "e609f370a46ba5e7cbe192fc5c44e402eea00e76d235568c0079d7f1e36727e4",
-		CircuitHash: "64193c545bfc4ea3e52af66beb05a02551337520ddd2a25e08b0b224730afae3",
+		KeyHash:     "e27a459c9cf0aa3c87cf49b4a3bc352b15495e2e420b65bac97795941df97f46",
+		CircuitHash: "39df55c578041ac435a5ead1573af4132c269063847359b8ba56c906e2ce4a77",
 		Prover:      &ChaChaProver{},
 	},
 	"aes-128-ctr": {
-		KeyHash:     "632015cc2db4fbdb89b3395a5812a8e89e7f56bb0b702468e5ae0852a2fcd402",
-		CircuitHash: "5f5c5748f35aea83eaac49b2b7f01b6e3cef842b4b4564961e60442873142265",
+		KeyHash:     "70a67f30e706a5ac91e231f23c936c3b06c4a34a7e7b578b74c70ec61473d13a",
+		CircuitHash: "396128ea72136960c8a0cfddf36e2888f398116a210904745c7ed62dfcd9b115",
 		Prover:      &AESProver{},
 	},
 	"aes-256-ctr": {
-		KeyHash:     "5461d6bb5ec52fe8ddc8f2d9ae92f71561defc2d697f71801981edd4707e0519",
-		CircuitHash: "ba7cd2f17886cd68017e317887a3fc4743fa51daf2e932d8d9905b54c15abf95",
+		KeyHash:     "b78c3e0b5c28c000e5338cf16e6745b8a8f2c3613d20898e88659e39c82f7de8",
+		CircuitHash: "7b03be9e28a5c6de19da34cfd9fad9e7dab62cda8873fada4e916b1978bbf692",
 		Prover:      &AESProver{},
 	},
 }
@@ -75,13 +77,13 @@ func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) (res b
 			return true
 		}
 
-		// inHash := sha256.Sum256(provingKey)
-		// keyHash := mustHex(proverParams.KeyHash)
+		inHash := sha256.Sum256(provingKey)
+		keyHash := mustHex(proverParams.KeyHash)
 
-		/*if subtle.ConstantTimeCompare(inHash[:], keyHash) != 1 {
+		if subtle.ConstantTimeCompare(inHash[:], keyHash) != 1 {
 			fmt.Println("incorrect hash")
 			return false
-		}*/
+		}
 
 		pkey := groth16.NewProvingKey(ecc.BN254)
 		_, err := pkey.ReadFrom(bytes.NewBuffer(provingKey))
@@ -91,13 +93,13 @@ func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) (res b
 		}
 
 		var r1cs constraint.ConstraintSystem
-		// inHash = sha256.Sum256(r1csData)
-		// circuitHash := mustHex(proverParams.CircuitHash)
+		inHash = sha256.Sum256(r1csData)
+		circuitHash := mustHex(proverParams.CircuitHash)
 
-		/*if subtle.ConstantTimeCompare(inHash[:], circuitHash) != 1 {
+		if subtle.ConstantTimeCompare(inHash[:], circuitHash) != 1 {
 			fmt.Println(fmt.Errorf("circuit hash mismatch"))
 			return false
-		}*/
+		}
 
 		r1cs = groth16.NewCS(ecc.BN254)
 		_, err = r1cs.ReadFrom(bytes.NewBuffer(r1csData))
