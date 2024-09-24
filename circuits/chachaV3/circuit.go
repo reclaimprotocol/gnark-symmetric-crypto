@@ -10,8 +10,8 @@ const Blocks = 1
 
 type ChaChaCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
-	Counter [BITS_PER_WORD]frontend.Variable
-	Nonce   [3][BITS_PER_WORD]frontend.Variable
+	Counter [BITS_PER_WORD]frontend.Variable              `gnark:",public"`
+	Nonce   [3][BITS_PER_WORD]frontend.Variable           `gnark:",public"`
 	In      [16 * Blocks][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 	Out     [16 * Blocks][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 }

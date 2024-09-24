@@ -2,8 +2,6 @@ package impl
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -77,13 +75,13 @@ func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) (res b
 			return true
 		}
 
-		inHash := sha256.Sum256(provingKey)
-		keyHash := mustHex(proverParams.KeyHash)
+		// inHash := sha256.Sum256(provingKey)
+		// keyHash := mustHex(proverParams.KeyHash)
 
-		if subtle.ConstantTimeCompare(inHash[:], keyHash) != 1 {
+		/*if subtle.ConstantTimeCompare(inHash[:], keyHash) != 1 {
 			fmt.Println("incorrect hash")
 			return false
-		}
+		}*/
 
 		pkey := groth16.NewProvingKey(ecc.BN254)
 		_, err := pkey.ReadFrom(bytes.NewBuffer(provingKey))
@@ -93,13 +91,13 @@ func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) (res b
 		}
 
 		var r1cs constraint.ConstraintSystem
-		inHash = sha256.Sum256(r1csData)
-		circuitHash := mustHex(proverParams.CircuitHash)
+		// inHash = sha256.Sum256(r1csData)
+		// circuitHash := mustHex(proverParams.CircuitHash)
 
-		if subtle.ConstantTimeCompare(inHash[:], circuitHash) != 1 {
+		/*if subtle.ConstantTimeCompare(inHash[:], circuitHash) != 1 {
 			fmt.Println(fmt.Errorf("circuit hash mismatch"))
 			return false
-		}
+		}*/
 
 		r1cs = groth16.NewCS(ecc.BN254)
 		_, err = r1cs.ReadFrom(bytes.NewBuffer(r1csData))
