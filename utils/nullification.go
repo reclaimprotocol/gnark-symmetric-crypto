@@ -9,15 +9,19 @@ import (
 )
 
 type NullificationInput struct {
-	Mask           frontend.Variable
-	SignatureR     twistededwards2.Point
-	SignatureS     frontend.Variable
-	PublicKey      twistededwards2.Point
-	MishtiResponse []frontend.Variable
+	PublicKey      eddsa.PublicKey     `gnark:",public"`
+	Signature      eddsa.Signature     `gnark:",public"`
+	MishtiResponse []frontend.Variable `gnark:",public"`
 	SecretData     []frontend.Variable
+	Mask           frontend.Variable
 }
 
 func ProcessNullification(api frontend.API, input NullificationInput) error {
+
+	mimc, err := mimc.NewMiMC(api)
+	if err != nil {
+		return err
+	}
 
 	// Create the curve
 	curve, err := twistededwards2.NewEdCurve(api, twistededwards.BN254)
@@ -34,24 +38,7 @@ func ProcessNullification(api frontend.API, input NullificationInput) error {
 	// Prepare the message
 	message := append([]frontend.Variable{mishtiInput}, input.MishtiResponse...)
 
-	// Verify the signature
-	pubKey := eddsa.PublicKey{
-		A: input.PublicKey,
-	}
-
-	signature := eddsa.Signature{
-		R: input.SignatureR,
-		S: input.SignatureS,
-	}
-
-	hFunc, _ := mimc.NewMiMC(api)
-
-	// Verify the signature
-	err = eddsa.Verify(curve, signature, message, pubKey, &hFunc)
-	if err != nil {
-		return err
-	}
-	return nil
+	return eddsa.Verify(curve, input.Signature, message, input.PublicKey, &mimc)
 }
 
 // HashToCurve implements the Elligator2 mapping to map data to a point on the curve
