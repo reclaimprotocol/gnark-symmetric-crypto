@@ -2,6 +2,8 @@ package utils
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/consensys/gnark-crypto/ecc/twistededwards"
 	"github.com/consensys/gnark/frontend"
 	twistededwards2 "github.com/consensys/gnark/std/algebra/native/twistededwards"
@@ -15,14 +17,10 @@ type NullificationInput struct {
 	MishtiResponse frontend.Variable `gnark:",public"`
 	Mask           frontend.Variable
 	SecretData     frontend.Variable
+	ExpectedResult frontend.Variable `gnark:"data,public"`
 }
 
 func ProcessNullification(api frontend.API, input NullificationInput) error {
-
-	mimc, err := mimc.NewMiMC(api)
-	if err != nil {
-		return err
-	}
 
 	// Create the curve
 	curve, err := twistededwards2.NewEdCurve(api, twistededwards.BN254)
@@ -47,21 +45,28 @@ func ProcessNullification(api frontend.API, input NullificationInput) error {
 		),
 	)
 
-	fmt.Printf("Message = %s\n", message)
+	hField, err := mimc.NewMiMC(api)
+	if err != nil {
+		return err
+	}
+	hField.Write(message)
+	hashOf := hField.Sum()
+	//fmt.Printf("message : %s\n", message)
+	//hashOf, _ := HashBN254(message)
 
-	mimc.Write(message)
-	hashOf := mimc.Sum()
-
-	fmt.Printf("hash message: %x\n", hashOf)
-	return eddsa.Verify(curve, input.Signature, hashOf, input.PublicKey, &mimc)
+	hField.Reset()
+	fmt.Printf("hash message: %s\n", hashOf)
+	api.AssertIsEqual(hashOf, input.ExpectedResult)
+	return eddsa.Verify(curve, input.Signature, hashOf, input.PublicKey, &hField)
 }
 
-// HashToCurve implements the Elligator2 mapping to map data to a point on the curve
 func HashToCurve(api frontend.API, curve twistededwards2.Curve, data frontend.Variable) twistededwards2.Point {
 	// Step 1: Hash the data using MiMC hash function
-	hFunc, _ := mimc.NewMiMC(api)
-	hFunc.Write(data)
-	u := hFunc.Sum()
+	// Convert data to bytes if necessary
+	dataBytes := []byte(fmt.Sprintf("%s", data))
+
+	hashOf, _ := HashBN254(dataBytes)
+	u := new(big.Int).SetBytes(hashOf)
 
 	// Constants
 	A := curve.Params().A

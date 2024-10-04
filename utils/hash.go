@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
+	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark-crypto/hash"
 	"math/big"
 )
@@ -16,27 +16,25 @@ func HashBN254(data []byte) ([]byte, error) {
 	copy(paddedMsg, data)
 
 	// Check if any field element is larger than the modulus
-	modulus := fr.Modulus()
+	modulus := ecc.BN254.ScalarField()
 	for i := 0; i < len(paddedMsg); i += fieldSize {
 		element := new(big.Int).SetBytes(paddedMsg[i : i+fieldSize])
-		if element.Cmp(modulus) >= 0 {
-			// Mod the value to be less than modulus
-			element.Mod(element, modulus)
-			// Convert the modded element back to bytes and update paddedMsg
-			elementBytes := element.Bytes()
-			// Ensure the byte slice is the correct length
-			if len(elementBytes) < fieldSize {
-				padding := make([]byte, fieldSize-len(elementBytes))
-				elementBytes = append(padding, elementBytes...)
-			}
-			copy(paddedMsg[i:i+fieldSize], elementBytes)
+		element.Mod(element, modulus)
+		// Convert the modded element back to bytes and update paddedMsg
+		elementBytes := element.Bytes()
+		// Ensure the byte slice is the correct length
+		if len(elementBytes) < fieldSize {
+			padding := make([]byte, fieldSize-len(elementBytes))
+			elementBytes = append(padding, elementBytes...)
 		}
+		copy(paddedMsg[i:i+fieldSize], elementBytes)
+
 	}
 
 	_, err := hasher.Write(paddedMsg)
 	if err != nil {
 		return nil, err
 	}
-	hashV := hasher.Sum(make([]byte, 0))
+	hashV := hasher.Sum(nil)
 	return hashV, nil
 }

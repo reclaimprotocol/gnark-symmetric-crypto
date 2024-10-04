@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/consensys/gnark-crypto/ecc"
+
 	"github.com/consensys/gnark-crypto/ecc/twistededwards"
 	"github.com/consensys/gnark-crypto/hash"
 	gnarkeddsa "github.com/consensys/gnark-crypto/signature/eddsa"
@@ -17,6 +19,8 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/test"
 )
+
+var scalarField = ecc.BN254.ScalarField()
 
 type ProcessNullificationCircuit struct {
 	Input utils.NullificationInput
@@ -31,7 +35,7 @@ func TestProcessNullification(t *testing.T) {
 	curve, err := twistededwards2.GetCurveParams(twistededwards.BN254)
 	assert.NoError(err, "unable to get curve parameters")
 
-	seed := generateRandomSeed(t)
+	seed := generateRandomSeed()
 	randomness := rand.New(rand.NewSource(seed))
 
 	// Generate EDDSA key pair
@@ -42,12 +46,13 @@ func TestProcessNullification(t *testing.T) {
 	secretData := []byte("user:123")
 
 	x, y := HashToCurve(*curve, secretData)
-	//t.Logf("x = %v, y = %v", x, y)
-	r := new(big.Int).SetInt64(generateRandomSeed(t))
+	r := new(big.Int).SetInt64(generateRandomSeed())
 
 	// Compute mishtiInput = H * r
 	mishtiInputX := new(big.Int).Mul(x, r)
+	mishtiInputX.Mod(mishtiInputX, scalarField)
 	mishtiInputY := new(big.Int).Mul(y, r)
+	mishtiInputY.Mod(mishtiInputY, scalarField)
 
 	// Prepare mishtiResponse
 	mishtiResponse, _ := new(big.Int).SetString("10110291770324934936175892571039775697749083457971239981851098944223339000212", 10)
@@ -62,14 +67,14 @@ func TestProcessNullification(t *testing.T) {
 		),
 	)
 
-	t.Logf("Message v: %s", msgDataUnpadded)
 	_publicKeyBytes := pubKey.Bytes()[:]
 	_publicKey := new(eddsa.PublicKey)
 	_publicKey.Assign(twistededwards.BN254, _publicKeyBytes)
 
 	hashV, err := utils.HashBN254(msgDataUnpadded)
+	fmt.Printf("hash test : %x\n", hashV)
 	assert.NoError(err, "unable to hash message")
-	t.Logf("Hash v: %x", hashV)
+
 	signatureOf, err := privKey.Sign(hashV, hash.MIMC_BN254.New())
 	assert.NoError(err, "signing message")
 
@@ -87,6 +92,7 @@ func TestProcessNullification(t *testing.T) {
 		PublicKey:      *_publicKey,
 		SecretData:     secretData,
 		MishtiResponse: mishtiResponse,
+		ExpectedResult: hashV,
 	}
 
 	// Create circuit assignment
@@ -95,10 +101,9 @@ func TestProcessNullification(t *testing.T) {
 	}
 
 	// Assert that the circuit compiles and runs correctly
-	assert.ProverSucceeded(&ProcessNullificationCircuit{}, &assignment)
+	assert.CheckCircuit(&ProcessNullificationCircuit{}, test.WithCurves(ecc.BN254), test.WithValidAssignment(&assignment))
 }
 
-// HashToCurve hashes data to a point on the elliptic curve using Elligator2 mapping
 func HashToCurve(curve twistededwards2.CurveParams, data []byte) (x, y *big.Int) {
 	hashOf, _ := utils.HashBN254(data)
 	u := new(big.Int).SetBytes(hashOf)
@@ -113,37 +118,35 @@ func HashToCurve(curve twistededwards2.CurveParams, data []byte) (x, y *big.Int)
 
 	// Compute v = -A / (1 + D * u^2)
 	denominator := new(big.Int).Add(one, new(big.Int).Mul(D, uSquared))
-	denominator.Mod(denominator, curve.Order)
+	denominator.Mod(denominator, scalarField)
 
 	v := new(big.Int).Neg(A)
-	v.Mod(v, curve.Order)
-	v.Mul(v, new(big.Int).ModInverse(denominator, curve.Order))
-	// v.Mul(v, denominator)
-	v.Mod(v, curve.Order)
+	v.Mod(v, scalarField)
+	v.Mul(v, new(big.Int).ModInverse(denominator, scalarField))
+	v.Mod(v, scalarField)
 
 	// Compute x = v * (1 + u^2) / (1 - u^2)
 	numeratorX := new(big.Int).Add(one, uSquared)
 	numeratorX.Mul(numeratorX, v)
+	numeratorX.Mod(numeratorX, scalarField)
 	denominatorX := new(big.Int).Sub(one, uSquared)
-	denominatorX.Mod(denominatorX, curve.Order)
-	x = new(big.Int).Mul(numeratorX, new(big.Int).ModInverse(denominatorX, curve.Order))
-	// x = new(big.Int).Mul(numeratorX, denominatorX)
-	x.Mod(x, curve.Order)
+	denominatorX.Mod(denominatorX, scalarField)
+	x = new(big.Int).Mul(numeratorX, new(big.Int).ModInverse(denominatorX, scalarField))
+	x.Mod(x, scalarField)
 
 	// Compute y numerator and denominator
 	numeratorY := new(big.Int).Sub(u, new(big.Int).Mul(x, u))
-	numeratorY.Mod(numeratorY, curve.Order)
+	numeratorY.Mod(numeratorY, scalarField)
 	denominatorY := new(big.Int).Add(one, new(big.Int).Mul(x, v))
-	denominatorY.Mod(denominatorY, curve.Order)
+	denominatorY.Mod(denominatorY, scalarField)
 	// y = new(big.Int).Mul(numeratorY, denominatorY)
-	y = new(big.Int).Mul(numeratorY, new(big.Int).ModInverse(denominatorY, curve.Order))
-	y.Mod(y, curve.Order)
+	y = new(big.Int).Mul(numeratorY, new(big.Int).ModInverse(denominatorY, scalarField))
+	y.Mod(y, scalarField)
 
 	return x, y
 }
 
-func generateRandomSeed(t *testing.T) int64 {
+func generateRandomSeed() int64 {
 	seed := time.Now().Unix()
-	//t.Logf("setting seed in rand %d", seed)
 	return seed
 }
