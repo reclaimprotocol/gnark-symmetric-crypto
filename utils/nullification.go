@@ -2,8 +2,7 @@ package utils
 
 import (
 	"fmt"
-	"math/big"
-
+	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark-crypto/ecc/twistededwards"
 	"github.com/consensys/gnark/frontend"
 	twistededwards2 "github.com/consensys/gnark/std/algebra/native/twistededwards"
@@ -17,25 +16,19 @@ type NullificationInput struct {
 	MishtiResponse frontend.Variable `gnark:",public"`
 	Mask           frontend.Variable
 	SecretData     frontend.Variable
-	ExpectedResult frontend.Variable `gnark:"data,public"`
 }
 
 func ProcessNullification(api frontend.API, input NullificationInput) error {
-
-	// Create the curve
 	curve, err := twistededwards2.NewEdCurve(api, twistededwards.BN254)
 	if err != nil {
 		return err
 	}
-
-	// Hash the secret data (e.g., SSN) to a curve point
 	H := HashToCurve(api, curve, input.SecretData)
 
 	// Compute Input = H * Mask
 	mishtiInputX := api.Mul(H.X, input.Mask)
 	mishtiInputY := api.Mul(H.Y, input.Mask)
 
-	// Prepare the message
 	message := []byte(
 		fmt.Sprintf(
 			"%s,%s,%s",
@@ -44,29 +37,34 @@ func ProcessNullification(api frontend.API, input NullificationInput) error {
 			input.MishtiResponse,
 		),
 	)
+	paddedData := PadMsg(message, 32, ecc.BN254.ScalarField())
+
+	//var message int
+	//_, err = api.Compiler().NewHint(MakeMessageHint, message, mishtiInputX, mishtiInputY, input.MishtiResponse)
 
 	hField, err := mimc.NewMiMC(api)
 	if err != nil {
 		return err
 	}
-	hField.Write(message)
-	hashOf := hField.Sum()
-	//fmt.Printf("message : %s\n", message)
-	//hashOf, _ := HashBN254(message)
 
-	hField.Reset()
-	fmt.Printf("hash message: %s\n", hashOf)
-	api.AssertIsEqual(hashOf, input.ExpectedResult)
-	return eddsa.Verify(curve, input.Signature, hashOf, input.PublicKey, &hField)
+	return eddsa.Verify(curve, input.Signature, paddedData, input.PublicKey, &hField)
 }
+
+//func MakeMessageHint(_ *big.Int, inputs []*big.Int, results []*big.Int) error {
+//	message := []byte(fmt.Sprintf("%s,%s,%s", inputs[0], inputs[1], inputs[2]))
+//	paddedMsg := PadMsg(message, 32, ecc.BN254.ScalarField())
+//	results[0].SetBytes(paddedMsg)
+//	return nil
+//}
 
 func HashToCurve(api frontend.API, curve twistededwards2.Curve, data frontend.Variable) twistededwards2.Point {
 	// Step 1: Hash the data using MiMC hash function
 	// Convert data to bytes if necessary
-	dataBytes := []byte(fmt.Sprintf("%s", data))
 
-	hashOf, _ := HashBN254(dataBytes)
-	u := new(big.Int).SetBytes(hashOf)
+	paddedData := PadMsg([]byte(fmt.Sprintf("%s", data)), 32, ecc.BN254.ScalarField())
+	hFunc, _ := mimc.NewMiMC(api)
+	hFunc.Write(paddedData)
+	u := hFunc.Sum()
 
 	// Constants
 	A := curve.Params().A

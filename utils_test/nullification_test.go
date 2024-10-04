@@ -38,7 +38,6 @@ func TestProcessNullification(t *testing.T) {
 	seed := generateRandomSeed()
 	randomness := rand.New(rand.NewSource(seed))
 
-	// Generate EDDSA key pair
 	privKey, err := gnarkeddsa.New(twistededwards.BN254, randomness)
 	assert.NoError(err, "unable to generate random key")
 	pubKey := privKey.Public()
@@ -54,10 +53,8 @@ func TestProcessNullification(t *testing.T) {
 	mishtiInputY := new(big.Int).Mul(y, r)
 	mishtiInputY.Mod(mishtiInputY, scalarField)
 
-	// Prepare mishtiResponse
 	mishtiResponse, _ := new(big.Int).SetString("10110291770324934936175892571039775697749083457971239981851098944223339000212", 10)
 
-	// Prepare the message
 	msgDataUnpadded := []byte(
 		fmt.Sprintf(
 			"%s,%s,%s",
@@ -66,53 +63,45 @@ func TestProcessNullification(t *testing.T) {
 			mishtiResponse.String(),
 		),
 	)
+	paddedMsg := utils.PadMsg(msgDataUnpadded, 32, scalarField)
 
-	_publicKeyBytes := pubKey.Bytes()[:]
-	_publicKey := new(eddsa.PublicKey)
-	_publicKey.Assign(twistededwards.BN254, _publicKeyBytes)
-
-	hashV, err := utils.HashBN254(msgDataUnpadded)
-	fmt.Printf("hash test : %x\n", hashV)
-	assert.NoError(err, "unable to hash message")
-
-	signatureOf, err := privKey.Sign(hashV, hash.MIMC_BN254.New())
+	signatureOf, err := privKey.Sign(paddedMsg, hash.MIMC_BN254.New())
 	assert.NoError(err, "signing message")
 
-	checkSig, err := pubKey.Verify(signatureOf, hashV, hash.MIMC_BN254.New())
+	checkSig, err := pubKey.Verify(signatureOf, paddedMsg, hash.MIMC_BN254.New())
 	assert.NoError(err, "verifying signature")
 	assert.True(checkSig, "signature verification failed")
 
 	_signature := new(eddsa.Signature)
 	_signature.Assign(twistededwards.BN254, signatureOf)
+	_publicKeyBytes := pubKey.Bytes()
+	_publicKey := new(eddsa.PublicKey)
+	_publicKey.Assign(twistededwards.BN254, _publicKeyBytes)
 
-	// Prepare circuit inputs
 	input := utils.NullificationInput{
 		Mask:           r,
 		Signature:      *_signature,
 		PublicKey:      *_publicKey,
 		SecretData:     secretData,
 		MishtiResponse: mishtiResponse,
-		ExpectedResult: hashV,
 	}
 
-	// Create circuit assignment
 	assignment := ProcessNullificationCircuit{
 		Input: input,
 	}
 
-	// Assert that the circuit compiles and runs correctly
 	assert.CheckCircuit(&ProcessNullificationCircuit{}, test.WithCurves(ecc.BN254), test.WithValidAssignment(&assignment))
 }
 
 func HashToCurve(curve twistededwards2.CurveParams, data []byte) (x, y *big.Int) {
-	hashOf, _ := utils.HashBN254(data)
-	u := new(big.Int).SetBytes(hashOf)
+	hasher := hash.Hash.New(hash.MIMC_BN254)
+	paddedData := utils.PadMsg(data, 32, scalarField)
+	hasher.Write(paddedData)
+	u := new(big.Int).SetBytes(hasher.Sum(nil))
 
 	// Constants
 	A := curve.A
 	D := curve.D
-
-	// Step 2: Compute Elligator2 mapping
 	one := big.NewInt(1)
 	uSquared := new(big.Int).Mul(u, u)
 
@@ -139,6 +128,7 @@ func HashToCurve(curve twistededwards2.CurveParams, data []byte) (x, y *big.Int)
 	numeratorY.Mod(numeratorY, scalarField)
 	denominatorY := new(big.Int).Add(one, new(big.Int).Mul(x, v))
 	denominatorY.Mod(denominatorY, scalarField)
+
 	// y = new(big.Int).Mul(numeratorY, denominatorY)
 	y = new(big.Int).Mul(numeratorY, new(big.Int).ModInverse(denominatorY, scalarField))
 	y.Mod(y, scalarField)
