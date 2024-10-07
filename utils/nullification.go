@@ -12,6 +12,7 @@ type NullificationInput struct {
 	PublicKey      eddsa.PublicKey   `gnark:",public"`
 	Signature      eddsa.Signature   `gnark:",public"`
 	MishtiResponse frontend.Variable `gnark:",public"`
+	Nullifier      frontend.Variable `gnark:",public"`
 	Mask           frontend.Variable
 	SecretData     frontend.Variable
 }
@@ -39,7 +40,13 @@ func ProcessNullification(api frontend.API, input NullificationInput) error {
 	hashedMsg := hField.Sum()
 	hField.Reset()
 
-	return eddsa.Verify(curve, input.Signature, hashedMsg, input.PublicKey, &hField)
+	if err := eddsa.Verify(curve, input.Signature, hashedMsg, input.PublicKey, &hField); err != nil {
+		return err
+	}
+
+	calculatedNullifier := api.Div(input.MishtiResponse, input.Mask)
+	api.AssertIsEqual(input.Nullifier, calculatedNullifier)
+	return nil
 }
 
 func HashToCurve(api frontend.API, curve twistededwards2.Curve, data frontend.Variable) twistededwards2.Point {

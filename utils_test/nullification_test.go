@@ -79,12 +79,16 @@ func TestProcessNullification(t *testing.T) {
 	_publicKey := new(eddsa.PublicKey)
 	_publicKey.Assign(twistededwards.BN254, _publicKeyBytes)
 
+	nullifier := new(big.Int).Mul(mishtiResponse, new(big.Int).ModInverse(r, scalarField))
+	nullifier.Mod(nullifier, scalarField)
+
 	input := utils.NullificationInput{
 		Mask:           r,
 		Signature:      *_signature,
 		PublicKey:      *_publicKey,
 		SecretData:     secretData,
 		MishtiResponse: mishtiResponse,
+		Nullifier:      nullifier,
 	}
 
 	assignment := ProcessNullificationCircuit{
