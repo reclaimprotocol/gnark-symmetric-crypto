@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"fmt"
-	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark-crypto/ecc/twistededwards"
 	"github.com/consensys/gnark/frontend"
 	twistededwards2 "github.com/consensys/gnark/std/algebra/native/twistededwards"
@@ -29,41 +27,25 @@ func ProcessNullification(api frontend.API, input NullificationInput) error {
 	mishtiInputX := api.Mul(H.X, input.Mask)
 	mishtiInputY := api.Mul(H.Y, input.Mask)
 
-	message := []byte(
-		fmt.Sprintf(
-			"%s,%s,%s",
-			mishtiInputX,
-			mishtiInputY,
-			input.MishtiResponse,
-		),
-	)
-	paddedData := PadMsg(message, 32, ecc.BN254.ScalarField())
-
-	//var message int
-	//_, err = api.Compiler().NewHint(MakeMessageHint, message, mishtiInputX, mishtiInputY, input.MishtiResponse)
+	message := []frontend.Variable{mishtiInputX, mishtiInputY, input.MishtiResponse}
 
 	hField, err := mimc.NewMiMC(api)
 	if err != nil {
 		return err
 	}
+	for _, element := range message {
+		hField.Write(element)
+	}
+	hashedMsg := hField.Sum()
+	hField.Reset()
 
-	return eddsa.Verify(curve, input.Signature, paddedData, input.PublicKey, &hField)
+	return eddsa.Verify(curve, input.Signature, hashedMsg, input.PublicKey, &hField)
 }
-
-//func MakeMessageHint(_ *big.Int, inputs []*big.Int, results []*big.Int) error {
-//	message := []byte(fmt.Sprintf("%s,%s,%s", inputs[0], inputs[1], inputs[2]))
-//	paddedMsg := PadMsg(message, 32, ecc.BN254.ScalarField())
-//	results[0].SetBytes(paddedMsg)
-//	return nil
-//}
 
 func HashToCurve(api frontend.API, curve twistededwards2.Curve, data frontend.Variable) twistededwards2.Point {
 	// Step 1: Hash the data using MiMC hash function
-	// Convert data to bytes if necessary
-
-	paddedData := PadMsg([]byte(fmt.Sprintf("%s", data)), 32, ecc.BN254.ScalarField())
 	hFunc, _ := mimc.NewMiMC(api)
-	hFunc.Write(paddedData)
+	hFunc.Write(data)
 	u := hFunc.Sum()
 
 	// Constants

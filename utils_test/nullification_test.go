@@ -1,7 +1,6 @@
 package utils_test
 
 import (
-	"fmt"
 	"gnark-symmetric-crypto/utils"
 	"math/big"
 	"math/rand"
@@ -42,7 +41,7 @@ func TestProcessNullification(t *testing.T) {
 	assert.NoError(err, "unable to generate random key")
 	pubKey := privKey.Public()
 
-	secretData := []byte("user:123")
+	secretData, _ := new(big.Int).SetString("123", 10)
 
 	x, y := HashToCurve(*curve, secretData)
 	r := new(big.Int).SetInt64(generateRandomSeed())
@@ -55,20 +54,23 @@ func TestProcessNullification(t *testing.T) {
 
 	mishtiResponse, _ := new(big.Int).SetString("10110291770324934936175892571039775697749083457971239981851098944223339000212", 10)
 
-	msgDataUnpadded := []byte(
-		fmt.Sprintf(
-			"%s,%s,%s",
-			mishtiInputX.String(),
-			mishtiInputY.String(),
-			mishtiResponse.String(),
-		),
-	)
-	paddedMsg := utils.PadMsg(msgDataUnpadded, 32, scalarField)
+	message := []*big.Int{
+		mishtiInputX,
+		mishtiInputY,
+		mishtiResponse,
+	}
+	paddedMsg := utils.PadMsg(message)
 
-	signatureOf, err := privKey.Sign(paddedMsg, hash.MIMC_BN254.New())
+	hasher := hash.MIMC_BN254.New()
+	for _, value := range paddedMsg {
+		hasher.Write(value.Marshal())
+	}
+	hashedMsg := hasher.Sum(nil)
+
+	signatureOf, err := privKey.Sign(hashedMsg, hash.MIMC_BN254.New())
 	assert.NoError(err, "signing message")
 
-	checkSig, err := pubKey.Verify(signatureOf, paddedMsg, hash.MIMC_BN254.New())
+	checkSig, err := pubKey.Verify(signatureOf, hashedMsg, hash.MIMC_BN254.New())
 	assert.NoError(err, "verifying signature")
 	assert.True(checkSig, "signature verification failed")
 
@@ -93,10 +95,10 @@ func TestProcessNullification(t *testing.T) {
 	assert.CheckCircuit(&ProcessNullificationCircuit{}, test.WithCurves(ecc.BN254), test.WithValidAssignment(&assignment))
 }
 
-func HashToCurve(curve twistededwards2.CurveParams, data []byte) (x, y *big.Int) {
+func HashToCurve(curve twistededwards2.CurveParams, data *big.Int) (x, y *big.Int) {
 	hasher := hash.Hash.New(hash.MIMC_BN254)
-	paddedData := utils.PadMsg(data, 32, scalarField)
-	hasher.Write(paddedData)
+	paddedData := utils.PadMsg([]*big.Int{data})
+	hasher.Write(paddedData[0].Marshal())
 	u := new(big.Int).SetBytes(hasher.Sum(nil))
 
 	// Constants
