@@ -54,16 +54,15 @@ func TestProcessNullification(t *testing.T) {
 
 	mishtiResponse, _ := new(big.Int).SetString("10110291770324934936175892571039775697749083457971239981851098944223339000212", 10)
 
-	message := []*big.Int{
+	paddedMsg := []*big.Int{
 		mishtiInputX,
 		mishtiInputY,
 		mishtiResponse,
 	}
-	paddedMsg := utils.PadMsg(message)
 
 	hasher := hash.MIMC_BN254.New()
 	for _, value := range paddedMsg {
-		hasher.Write(value.Marshal())
+		hasher.Write(value.Bytes())
 	}
 	hashedMsg := hasher.Sum(nil)
 
@@ -97,8 +96,7 @@ func TestProcessNullification(t *testing.T) {
 
 func HashToCurve(curve twistededwards2.CurveParams, data *big.Int) (x, y *big.Int) {
 	hasher := hash.Hash.New(hash.MIMC_BN254)
-	paddedData := utils.PadMsg([]*big.Int{data})
-	hasher.Write(paddedData[0].Marshal())
+	hasher.Write(data.Bytes())
 	u := new(big.Int).SetBytes(hasher.Sum(nil))
 
 	// Constants
