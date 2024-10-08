@@ -1,21 +1,21 @@
 package utils_test
 
 import (
+	"github.com/consensys/gnark-crypto/ecc"
+	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
+	"github.com/consensys/gnark-crypto/signature"
+	twistededwards2 "github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"gnark-symmetric-crypto/utils"
 	"math/big"
 	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/consensys/gnark-crypto/ecc"
-
 	"github.com/consensys/gnark-crypto/ecc/twistededwards"
 	"github.com/consensys/gnark-crypto/hash"
 	gnarkeddsa "github.com/consensys/gnark-crypto/signature/eddsa"
-	twistededwards2 "github.com/consensys/gnark/std/algebra/native/twistededwards"
-	"github.com/consensys/gnark/std/signature/eddsa"
-
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/signature/eddsa"
 	"github.com/consensys/gnark/test"
 )
 
@@ -31,63 +31,35 @@ func (circuit *ProcessNullificationCircuit) Define(api frontend.API) error {
 
 func TestProcessNullification(t *testing.T) {
 	assert := test.NewAssert(t)
-	curve, err := twistededwards2.GetCurveParams(twistededwards.BN254)
-	assert.NoError(err, "unable to get curve parameters")
+	testData := prepareTestData()
 
-	seed := generateRandomSeed()
-	randomness := rand.New(rand.NewSource(seed))
-
-	privKey, err := gnarkeddsa.New(twistededwards.BN254, randomness)
-	assert.NoError(err, "unable to generate random key")
-	pubKey := privKey.Public()
-
-	secretData, _ := new(big.Int).SetString("123", 10)
-
-	x, y := HashToCurve(*curve, secretData)
-	r := new(big.Int).SetInt64(generateRandomSeed())
+	H := hashToCurve(testData.secretData.Bytes())
+	assert.Equal(true, H.IsOnCurve())
 
 	// Compute mishtiInput = H * r
-	mishtiInputX := new(big.Int).Mul(x, r)
-	mishtiInputX.Mod(mishtiInputX, scalarField)
-	mishtiInputY := new(big.Int).Mul(y, r)
-	mishtiInputY.Mod(mishtiInputY, scalarField)
+	var mishtiInput tbn254.PointAffine
+	mishtiInput.ScalarMultiplication(&H, testData.r)
 
-	mishtiResponse, _ := new(big.Int).SetString("10110291770324934936175892571039775697749083457971239981851098944223339000212", 10)
+	//mishtiInput := H.ScalarMultiplication(&H, testData.r)
+	assert.Equal(true, mishtiInput.IsOnCurve())
 
-	paddedMsg := []*big.Int{
-		mishtiInputX,
-		mishtiInputY,
-		mishtiResponse,
-	}
+	hashedMsg := hashBN(
+		new(big.Int).SetBytes(mishtiInput.X.Marshal()).Bytes(),
+		new(big.Int).SetBytes(mishtiInput.Y.Marshal()).Bytes(),
+		testData.mishtiResponse.Bytes(),
+	)
 
-	hasher := hash.MIMC_BN254.New()
-	for _, value := range paddedMsg {
-		hasher.Write(value.Bytes())
-	}
-	hashedMsg := hasher.Sum(nil)
+	signatureOf := signAndVerify(assert, hashedMsg, testData.privateKey, testData.publicKey)
 
-	signatureOf, err := privKey.Sign(hashedMsg, hash.MIMC_BN254.New())
-	assert.NoError(err, "signing message")
-
-	checkSig, err := pubKey.Verify(signatureOf, hashedMsg, hash.MIMC_BN254.New())
-	assert.NoError(err, "verifying signature")
-	assert.True(checkSig, "signature verification failed")
-
-	_signature := new(eddsa.Signature)
-	_signature.Assign(twistededwards.BN254, signatureOf)
-	_publicKeyBytes := pubKey.Bytes()
-	_publicKey := new(eddsa.PublicKey)
-	_publicKey.Assign(twistededwards.BN254, _publicKeyBytes)
-
-	nullifier := new(big.Int).Mul(mishtiResponse, new(big.Int).ModInverse(r, scalarField))
+	nullifier := new(big.Int).Mul(testData.mishtiResponse, new(big.Int).ModInverse(testData.r, scalarField))
 	nullifier.Mod(nullifier, scalarField)
 
 	input := utils.NullificationInput{
-		Mask:           r,
-		Signature:      *_signature,
-		PublicKey:      *_publicKey,
-		SecretData:     secretData,
-		MishtiResponse: mishtiResponse,
+		Mask:           testData.r,
+		Signature:      castToEddsaSignature(signatureOf),
+		PublicKey:      castToEddsaPublicKey(testData.publicKey),
+		SecretData:     testData.secretData,
+		MishtiResponse: testData.mishtiResponse,
 		Nullifier:      nullifier,
 	}
 
@@ -98,49 +70,71 @@ func TestProcessNullification(t *testing.T) {
 	assert.CheckCircuit(&ProcessNullificationCircuit{}, test.WithCurves(ecc.BN254), test.WithValidAssignment(&assignment))
 }
 
-func HashToCurve(curve twistededwards2.CurveParams, data *big.Int) (x, y *big.Int) {
-	hasher := hash.Hash.New(hash.MIMC_BN254)
-	hasher.Write(data.Bytes())
-	u := new(big.Int).SetBytes(hasher.Sum(nil))
-
-	// Constants
-	A := curve.A
-	D := curve.D
-	one := big.NewInt(1)
-	uSquared := new(big.Int).Mul(u, u)
-
-	// Compute v = -A / (1 + D * u^2)
-	denominator := new(big.Int).Add(one, new(big.Int).Mul(D, uSquared))
-	denominator.Mod(denominator, scalarField)
-
-	v := new(big.Int).Neg(A)
-	v.Mod(v, scalarField)
-	v.Mul(v, new(big.Int).ModInverse(denominator, scalarField))
-	v.Mod(v, scalarField)
-
-	// Compute x = v * (1 + u^2) / (1 - u^2)
-	numeratorX := new(big.Int).Add(one, uSquared)
-	numeratorX.Mul(numeratorX, v)
-	numeratorX.Mod(numeratorX, scalarField)
-	denominatorX := new(big.Int).Sub(one, uSquared)
-	denominatorX.Mod(denominatorX, scalarField)
-	x = new(big.Int).Mul(numeratorX, new(big.Int).ModInverse(denominatorX, scalarField))
-	x.Mod(x, scalarField)
-
-	// Compute y numerator and denominator
-	numeratorY := new(big.Int).Sub(u, new(big.Int).Mul(x, u))
-	numeratorY.Mod(numeratorY, scalarField)
-	denominatorY := new(big.Int).Add(one, new(big.Int).Mul(x, v))
-	denominatorY.Mod(denominatorY, scalarField)
-
-	// y = new(big.Int).Mul(numeratorY, denominatorY)
-	y = new(big.Int).Mul(numeratorY, new(big.Int).ModInverse(denominatorY, scalarField))
-	y.Mod(y, scalarField)
-
-	return x, y
+func hashToCurve(data []byte) tbn254.PointAffine {
+	hashedData := hashBN(data)
+	scalar := new(big.Int).SetBytes(hashedData)
+	curve := twistededwards.BN254
+	params, _ := twistededwards2.GetCurveParams(curve)
+	var point, multiplicationResult tbn254.PointAffine
+	point.X.SetBigInt(params.Base[0])
+	point.Y.SetBigInt(params.Base[1])
+	multiplicationResult.ScalarMultiplication(&point, scalar)
+	return multiplicationResult
 }
 
-func generateRandomSeed() int64 {
+type testData struct {
+	privateKey     signature.Signer
+	publicKey      signature.PublicKey
+	secretData     *big.Int
+	mishtiResponse *big.Int
+	r              *big.Int
+}
+
+func prepareTestData() testData {
 	seed := time.Now().Unix()
-	return seed
+	randomness := rand.New(rand.NewSource(seed))
+	mishtiResponse, _ := new(big.Int).SetString("10110291770324934936175892571039775697749083457971239981851098944223339000212", 10)
+
+	privateKey, _ := gnarkeddsa.New(twistededwards.BN254, randomness)
+	pubKey := privateKey.Public()
+
+	secretData, _ := new(big.Int).SetString("123", 10)
+	r := new(big.Int).SetInt64(time.Now().Unix())
+	return testData{
+		privateKey:     privateKey,
+		publicKey:      pubKey,
+		secretData:     secretData,
+		mishtiResponse: mishtiResponse,
+		r:              r,
+	}
+}
+
+func castToEddsaSignature(signatureOf []byte) eddsa.Signature {
+	_signature := new(eddsa.Signature)
+	_signature.Assign(twistededwards.BN254, signatureOf)
+	return *_signature
+}
+
+func castToEddsaPublicKey(pubKey signature.PublicKey) eddsa.PublicKey {
+	_publicKeyBytes := pubKey.Bytes()
+	_publicKey := new(eddsa.PublicKey)
+	_publicKey.Assign(twistededwards.BN254, _publicKeyBytes)
+	return *_publicKey
+}
+
+func hashBN(data ...[]byte) []byte {
+	hasher := hash.MIMC_BN254.New()
+	for _, d := range data {
+		hasher.Write(d)
+	}
+	return hasher.Sum(nil)
+}
+
+func signAndVerify(assert *test.Assert, message []byte, privateKey signature.Signer, publicKey signature.PublicKey) []byte {
+	signatureOf, err := privateKey.Sign(message, hash.MIMC_BN254.New())
+	assert.NoError(err, "signing message")
+	checkSig, err := publicKey.Verify(signatureOf, message, hash.MIMC_BN254.New())
+	assert.NoError(err, "verifying signature")
+	assert.True(checkSig, "signature verification failed")
+	return signatureOf
 }
