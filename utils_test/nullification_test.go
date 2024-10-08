@@ -1,15 +1,16 @@
 package utils_test
 
 import (
+	"crypto/rand"
+	"fmt"
+	"gnark-symmetric-crypto/utils"
+	"math/big"
+	"testing"
+
 	"github.com/consensys/gnark-crypto/ecc"
 	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	"github.com/consensys/gnark-crypto/signature"
 	twistededwards2 "github.com/consensys/gnark/std/algebra/native/twistededwards"
-	"gnark-symmetric-crypto/utils"
-	"math/big"
-	"math/rand"
-	"testing"
-	"time"
 
 	"github.com/consensys/gnark-crypto/ecc/twistededwards"
 	"github.com/consensys/gnark-crypto/hash"
@@ -40,7 +41,7 @@ func TestProcessNullification(t *testing.T) {
 	var mishtiInput tbn254.PointAffine
 	mishtiInput.ScalarMultiplication(&H, testData.r)
 
-	//mishtiInput := H.ScalarMultiplication(&H, testData.r)
+	// mishtiInput := H.ScalarMultiplication(&H, testData.r)
 	assert.Equal(true, mishtiInput.IsOnCurve())
 
 	hashedMsg := hashBN(
@@ -91,15 +92,20 @@ type testData struct {
 }
 
 func prepareTestData() testData {
-	seed := time.Now().Unix()
-	randomness := rand.New(rand.NewSource(seed))
 	mishtiResponse, _ := new(big.Int).SetString("10110291770324934936175892571039775697749083457971239981851098944223339000212", 10)
+	var t tbn254.PointAffine
+	_, err := t.SetBytes(mishtiResponse.Bytes())
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(t.IsOnCurve())
+	t.Marshal()
 
-	privateKey, _ := gnarkeddsa.New(twistededwards.BN254, randomness)
+	privateKey, _ := gnarkeddsa.New(twistededwards.BN254, rand.Reader)
 	pubKey := privateKey.Public()
 
 	secretData, _ := new(big.Int).SetString("123", 10)
-	r := new(big.Int).SetInt64(time.Now().Unix())
+	r, _ := rand.Int(rand.Reader, scalarField)
 	return testData{
 		privateKey:     privateKey,
 		publicKey:      pubKey,
