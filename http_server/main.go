@@ -9,6 +9,7 @@ import (
 	"gnark-symmetric-crypto/libraries/prover/impl"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog"
@@ -37,6 +38,8 @@ func prove(w http.ResponseWriter, req *http.Request) {
 		}
 		return
 	}
+
+	req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
 
 	proofReq, err := io.ReadAll(req.Body)
 	if err != nil {
@@ -106,8 +109,13 @@ func main() {
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	server := &http.Server{
-		Addr:    ":8888",
-		Handler: mux,
+		Addr:              ":8888",
+		Handler:           mux,
+		ReadTimeout:       5 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	l, err := vsock.Listen(8888, nil)
