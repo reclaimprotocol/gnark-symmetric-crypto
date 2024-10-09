@@ -8,14 +8,12 @@ import (
 	"gnark-symmetric-crypto/circuits/generated"
 	"gnark-symmetric-crypto/libraries/prover/impl"
 	"io"
-	"net"
 	"net/http"
 
+	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
-
-const keyServerAddr = "serverAddr"
 
 func prove(w http.ResponseWriter, req *http.Request) {
 
@@ -54,7 +52,6 @@ func prove(w http.ResponseWriter, req *http.Request) {
 }
 
 func getRoot(w http.ResponseWriter, _ *http.Request) {
-	fmt.Printf("got / request\n")
 	_, err := io.WriteString(w, "Reclaim prover works\n")
 	if err != nil {
 		log.Err(err)
@@ -111,15 +108,18 @@ func main() {
 	server := &http.Server{
 		Addr:    ":8888",
 		Handler: mux,
-		BaseContext: func(l net.Listener) context.Context {
-			ctx = context.WithValue(ctx, keyServerAddr, l.Addr().String())
-			return ctx
-		},
 	}
+
+	l, err := vsock.Listen(8888, nil)
+	if err != nil {
+		log.Err(err).Msg("failed vsock.Listen")
+		return
+	}
+	defer l.Close()
 
 	go func() {
 		log.Info().Msg("starting server")
-		err := server.ListenAndServe()
+		err = server.Serve(l)
 		if errors.Is(err, http.ErrServerClosed) {
 			fmt.Printf("server closed\n")
 		} else if err != nil {
