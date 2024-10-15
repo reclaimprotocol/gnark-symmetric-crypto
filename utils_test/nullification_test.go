@@ -9,11 +9,9 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
-	"github.com/consensys/gnark-crypto/signature"
-	twistededwards2 "github.com/consensys/gnark/std/algebra/native/twistededwards"
-
 	"github.com/consensys/gnark-crypto/ecc/twistededwards"
 	"github.com/consensys/gnark-crypto/hash"
+	"github.com/consensys/gnark-crypto/signature"
 	gnarkeddsa "github.com/consensys/gnark-crypto/signature/eddsa"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/signature/eddsa"
@@ -74,12 +72,9 @@ func TestProcessNullification(t *testing.T) {
 func hashToCurve(data []byte) tbn254.PointAffine {
 	hashedData := hashBN(data)
 	scalar := new(big.Int).SetBytes(hashedData)
-	curve := twistededwards.BN254
-	params, _ := twistededwards2.GetCurveParams(curve)
-	var point, multiplicationResult tbn254.PointAffine
-	point.X.SetBigInt(params.Base[0])
-	point.Y.SetBigInt(params.Base[1])
-	multiplicationResult.ScalarMultiplication(&point, scalar)
+	params := tbn254.GetEdwardsCurve()
+	var multiplicationResult tbn254.PointAffine
+	multiplicationResult.ScalarMultiplication(&params.Base, scalar)
 	return multiplicationResult
 }
 
@@ -143,4 +138,25 @@ func signAndVerify(assert *test.Assert, message []byte, privateKey signature.Sig
 	assert.NoError(err, "verifying signature")
 	assert.True(checkSig, "signature verification failed")
 	return signatureOf
+}
+
+func TestMaskUnmask(t *testing.T) {
+	assert := test.NewAssert(t)
+	curve := tbn254.GetEdwardsCurve()
+	data := &tbn254.PointAffine{}
+	base := curve.Base
+	data.ScalarMultiplication(&base, big.NewInt(12345)) // just dummy data
+
+	// random scalar
+	r, err := rand.Int(rand.Reader, &curve.Order)
+	assert.NoError(err)
+
+	blinded := &tbn254.PointAffine{}
+	blinded.ScalarMultiplication(data, r)
+
+	invR := r.ModInverse(r, &curve.Order)
+	deblinded := &tbn254.PointAffine{}
+	deblinded.ScalarMultiplication(blinded, invR)
+
+	assert.True(deblinded.Equal(data))
 }

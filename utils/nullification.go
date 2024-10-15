@@ -5,6 +5,7 @@ import (
 	"github.com/consensys/gnark/frontend"
 	twistededwards2 "github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/consensys/gnark/std/hash/mimc"
+	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/signature/eddsa"
 )
 
@@ -41,6 +42,11 @@ func ProcessNullification(api frontend.API, input NullificationInput) error {
 
 	// Compute Input = H * Mask
 	mishtiInput := curve.ScalarMul(H, input.Mask)
+	field, err := emulated.NewField[BabyParams](api)
+	if err != nil {
+		return err
+	}
+	field.Inverse()
 
 	message := []frontend.Variable{mishtiInput.X, mishtiInput.Y, input.MishtiResponse}
 
