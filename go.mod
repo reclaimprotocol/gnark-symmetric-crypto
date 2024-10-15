@@ -1,22 +1,23 @@
 module gnark-symmetric-crypto
 
-go 1.22
+go 1.22.0
 
-toolchain go1.23.0
+toolchain go1.23.2
 
 require (
+	github.com/aws/aws-sdk-go-v2 v1.32.2
 	github.com/aws/aws-sdk-go-v2/config v1.27.43
 	github.com/aws/aws-sdk-go-v2/service/kms v1.37.2
 	github.com/consensys/gnark v0.11.0
 	github.com/consensys/gnark-crypto v0.14.0
-	github.com/edgebitio/nitro-enclaves-sdk-go v1.0.0
 	github.com/mdlayher/vsock v1.2.1
 	github.com/rs/zerolog v1.33.0
 	golang.org/x/crypto v0.28.0
 )
 
+require github.com/austinast/nitro-enclaves-sdk-go v0.0.0-20240430100856-19343af9a0d0
+
 require (
-	github.com/aws/aws-sdk-go-v2 v1.32.2 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.41 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.17 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.21 // indirect
@@ -52,4 +53,4 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-replace github.com/aws/aws-sdk-go-v2/service/kms => github.com/edgebitio/nitro-enclaves-sdk-go/kms v0.0.0-20221110205443-8a5476ff3cc2
+replace github.com/aws/aws-sdk-go-v2/service/kms => github.com/austinast/nitro-enclaves-sdk-go/kms v0.0.0-20240430100856-19343af9a0d0

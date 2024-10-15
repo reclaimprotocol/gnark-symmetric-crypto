@@ -12,11 +12,11 @@ import (
 	"net/http"
 	"time"
 
+	enclave "github.com/austinast/nitro-enclaves-sdk-go"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
-	enclave "github.com/edgebitio/nitro-enclaves-sdk-go"
 	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -174,13 +174,26 @@ func MakeKMSRequest() error {
 	fmt.Println("defaultConfig: ", defaultConfig)
 	kmsClient := kms.NewFromConfig(defaultConfig)
 
+	key, err := kmsClient.CreateKey(ctx, &kms.CreateKeyInput{
+		Tags: []types.Tag{
+			{
+				TagKey:   aws.String("CreatedBy"),
+				TagValue: aws.String("ReclaimProver"),
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Println("key created: ", key.KeyMetadata.KeyId)
+
 	// Request a 32 byte data key from KMS, for use in AES-256 operations.
 	dataKeyRes, err := kmsClient.GenerateDataKey(context.Background(), &kms.GenerateDataKeyInput{
-		KeyId:   aws.String("arn:aws:kms:us-west-2:xxxxxxxxxx:key/12345678-abcd-ef12-1234-abcdef123456"),
+		KeyId:   key.KeyMetadata.KeyId,
 		KeySpec: types.DataKeySpecAes256,
-		Recipient: &types.RecipientInfoType{
+		Recipient: &types.RecipientInfo{
 			AttestationDocument:    attestationDocument,
-			KeyEncryptionAlgorithm: types.EncryptionAlgorithmSpecRsaesOaepSha256,
+			KeyEncryptionAlgorithm: types.KeyEncryptionMechanismRsaesOaepSha256,
 		},
 	})
 	if err != nil {
