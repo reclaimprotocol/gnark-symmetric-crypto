@@ -3,6 +3,7 @@ package main
 import "C"
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"gnark-symmetric-crypto/circuits/generated"
@@ -11,6 +12,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms/types"
+	enclave "github.com/edgebitio/nitro-enclaves-sdk-go"
 	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -102,6 +108,12 @@ func initProver() {
 
 func main() {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+
+	err := MakeKMSRequest()
+	if err != nil {
+		log.Err(err).Msg("make kms request")
+	}
+
 	initProver()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", getRoot)
@@ -137,4 +149,43 @@ func main() {
 	}()
 
 	<-ctx.Done()
+}
+
+func MakeKMSRequest() error {
+	enclaveHandle, err := enclave.GetOrInitializeHandle()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Enclave handle received ok:", enclaveHandle)
+	attestationDocument, err := enclaveHandle.Attest(enclave.AttestationOptions{})
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("attestationDocument: ", hex.EncodeToString(attestationDocument))
+
+	ctx := context.TODO()
+	defaultConfig, err := config.LoadDefaultConfig(ctx, config.WithRegion("ap-south-1"))
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("defaultConfig: ", defaultConfig)
+	kmsClient := kms.NewFromConfig(defaultConfig)
+
+	// Request a 32 byte data key from KMS, for use in AES-256 operations.
+	dataKeyRes, err := kmsClient.GenerateDataKey(context.Background(), &kms.GenerateDataKeyInput{
+		KeyId:   aws.String("arn:aws:kms:us-west-2:xxxxxxxxxx:key/12345678-abcd-ef12-1234-abcdef123456"),
+		KeySpec: types.DataKeySpecAes256,
+		Recipient: &types.RecipientInfoType{
+			AttestationDocument:    attestationDocument,
+			KeyEncryptionAlgorithm: types.EncryptionAlgorithmSpecRsaesOaepSha256,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Println("data Key received ok: ", dataKeyRes)
+	return nil
 }
