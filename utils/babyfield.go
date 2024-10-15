@@ -4,6 +4,8 @@ import (
 	"math/big"
 
 	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
+	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/math/emulated"
 )
 
 type BabyParams struct {
@@ -17,19 +19,34 @@ func (b BabyParams) Modulus() *big.Int {
 	return &order
 }
 
-/*type Scalar = emulated.Element[BabyParams]
 type ScalarField = BabyParams
-type EmulatedScalarField emulated.Field[BabyParams]
+type Scalar = emulated.Element[BabyParams]
 
-func (b BabyParams) packScalarToVar(s *Scalar) frontend.Variable {
-	var fr EmulatedScalarField
-	reduced := fr.Reduce(s)
+type BabyField struct {
+	api frontend.API
+	fr  *emulated.Field[ScalarField]
+}
+
+func NewBabyFieldHelper(api frontend.API) *BabyField {
+	field, err := emulated.NewField[ScalarField](api)
+	if err != nil {
+		panic(err)
+	}
+	return &BabyField{
+		api: api,
+		fr:  field,
+	}
+}
+
+func (b BabyField) packScalarToVar(s *Scalar) frontend.Variable {
+	var fr ScalarField
+	reduced := b.fr.Reduce(s)
 	var res frontend.Variable = 0
 	nbBits := fr.BitsPerLimb()
 	coef := new(big.Int)
 	one := big.NewInt(1)
 	for i := range reduced.Limbs {
-		res = c.api.Add(res, c.api.Mul(reduced.Limbs[i], coef.Lsh(one, nbBits*uint(i))))
+		res = b.api.Add(res, b.api.Mul(reduced.Limbs[i], coef.Lsh(one, nbBits*uint(i))))
 	}
 	return res
-}*/
+}

@@ -1,29 +1,60 @@
 package utils
 
 import (
-	"github.com/consensys/gnark-crypto/ecc/twistededwards"
+	"math/big"
+
+	twistededwards2 "github.com/consensys/gnark-crypto/ecc/twistededwards"
 	"github.com/consensys/gnark/frontend"
-	twistededwards2 "github.com/consensys/gnark/std/algebra/native/twistededwards"
+	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/consensys/gnark/std/hash/mimc"
 	"github.com/consensys/gnark/std/math/emulated"
-	"github.com/consensys/gnark/std/signature/eddsa"
 )
 
 type NullificationInput struct {
-	PublicKey      eddsa.PublicKey   `gnark:",public"`
-	Signature      eddsa.Signature   `gnark:",public"`
-	MishtiResponse frontend.Variable `gnark:",public"`
-	Nullifier      frontend.Variable `gnark:",public"`
-	Mask           frontend.Variable
-	SecretData     frontend.Variable
+	// Signature      eddsa.Signature   `gnark:",public"`
+	Response   twistededwards.Point `gnark:",public"`
+	SecretData *big.Int             `gnark:",public"`
+	Nullifier  twistededwards.Point `gnark:",public"`
+	Mask       *big.Int             `gnark:",public"`
 }
 
 func ProcessNullification(api frontend.API, input NullificationInput) error {
-	curve, err := twistededwards2.NewEdCurve(api, twistededwards.BN254)
+	curve, err := twistededwards.NewEdCurve(api, twistededwards2.BN254)
 	if err != nil {
 		return err
 	}
+	field, err := emulated.NewField[BabyParams](api)
+	if err != nil {
+		return err
+	}
+	helper := NewBabyFieldHelper(api)
+
+	basePoint := twistededwards.Point{
+		X: curve.Params().Base[0],
+		Y: curve.Params().Base[1],
+	}
+
 	hField, err := mimc.NewMiMC(api)
+	if err != nil {
+		return err
+	}
+	hField.Write(input.SecretData)
+	hashedSecretData := hField.Sum()
+	hField.Reset()
+
+	dataPoint := curve.ScalarMul(basePoint, hashedSecretData)
+
+	mask := field.NewElement(input.Mask)
+
+	masked := curve.ScalarMul(dataPoint, input.Mask)
+	invMask := helper.packScalarToVar(field.Inverse(mask))
+
+	unMasked := curve.ScalarMul(masked, invMask)
+
+	api.AssertIsEqual(dataPoint.X, unMasked.X)
+	api.AssertIsEqual(dataPoint.Y, unMasked.Y)
+
+	/*hField, err := mimc.NewMiMC(api)
 	if err != nil {
 		return err
 	}
@@ -61,6 +92,6 @@ func ProcessNullification(api frontend.API, input NullificationInput) error {
 	}
 
 	calculatedNullifier := api.Mul(input.MishtiResponse, api.Inverse(input.Mask))
-	api.AssertIsEqual(input.Nullifier, calculatedNullifier)
+	api.AssertIsEqual(input.Nullifier, calculatedNullifier)*/
 	return nil
 }

@@ -14,6 +14,8 @@ import (
 	"github.com/consensys/gnark-crypto/signature"
 	gnarkeddsa "github.com/consensys/gnark-crypto/signature/eddsa"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/frontend/cs/r1cs"
+	twistededwards2 "github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/consensys/gnark/std/signature/eddsa"
 	"github.com/consensys/gnark/test"
 )
@@ -35,38 +37,26 @@ func TestProcessNullification(t *testing.T) {
 	H := hashToCurve(testData.secretData.Bytes())
 	assert.Equal(true, H.IsOnCurve())
 
-	// Compute mishtiInput = H * r
-	var mishtiInput tbn254.PointAffine
-	mishtiInput.ScalarMultiplication(&H, testData.r)
-
-	// mishtiInput := H.ScalarMultiplication(&H, testData.r)
-	assert.Equal(true, mishtiInput.IsOnCurve())
-
-	hashedMsg := hashBN(
-		new(big.Int).SetBytes(mishtiInput.X.Marshal()).Bytes(),
-		new(big.Int).SetBytes(mishtiInput.Y.Marshal()).Bytes(),
-		testData.mishtiResponse.Bytes(),
-	)
-
-	signatureOf := signAndVerify(assert, hashedMsg, testData.privateKey, testData.publicKey)
-
-	nullifier := new(big.Int).Mul(testData.mishtiResponse, new(big.Int).ModInverse(testData.r, scalarField))
-	nullifier.Mod(nullifier, scalarField)
-
 	input := utils.NullificationInput{
-		Mask:           testData.r,
-		Signature:      castToEddsaSignature(signatureOf),
-		PublicKey:      castToEddsaPublicKey(testData.publicKey),
-		SecretData:     testData.secretData,
-		MishtiResponse: testData.mishtiResponse,
-		Nullifier:      nullifier,
+		Mask:       testData.r,
+		SecretData: testData.secretData,
+		Response: twistededwards2.Point{
+			X: H.X.BigInt(&big.Int{}),
+			Y: H.Y.BigInt(&big.Int{}),
+		},
+		Nullifier: twistededwards2.Point{
+			X: H.X.BigInt(&big.Int{}),
+			Y: H.Y.BigInt(&big.Int{}),
+		},
 	}
 
 	assignment := ProcessNullificationCircuit{
 		Input: input,
 	}
 
-	assert.CheckCircuit(&ProcessNullificationCircuit{}, test.WithCurves(ecc.BN254), test.WithValidAssignment(&assignment))
+	assert.CheckCircuit(&ProcessNullificationCircuit{input}, test.WithCurves(ecc.BN254), test.WithValidAssignment(&assignment))
+	cs, _ := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &assignment)
+	fmt.Println(cs.GetNbConstraints())
 }
 
 func hashToCurve(data []byte) tbn254.PointAffine {
@@ -159,4 +149,29 @@ func TestMaskUnmask(t *testing.T) {
 	deblinded.ScalarMultiplication(blinded, invR)
 
 	assert.True(deblinded.Equal(data))
+}
+
+// Decompose decomposes the input into res as integers of width nbBits. It
+// errors if the decomposition does not fit into res or if res is uninitialized.
+//
+// The following holds
+//
+//	input = \sum_{i=0}^{len(res)} res[i] * 2^{nbBits * i}
+func Decompose(input *big.Int, nbBits uint, res []*big.Int) error {
+	// limb modulus
+	if input.BitLen() > len(res)*int(nbBits) {
+		return fmt.Errorf("decomposed integer does not fit into res")
+	}
+	for _, r := range res {
+		if r == nil {
+			return fmt.Errorf("result slice element uninitialized")
+		}
+	}
+	base := new(big.Int).Lsh(big.NewInt(1), nbBits)
+	tmp := new(big.Int).Set(input)
+	for i := 0; i < len(res); i++ {
+		res[i].Mod(tmp, base)
+		tmp.Rsh(tmp, nbBits)
+	}
+	return nil
 }
