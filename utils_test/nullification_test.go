@@ -9,7 +9,6 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark-crypto/ecc/bn254"
-	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	"github.com/consensys/gnark-crypto/hash"
 	"github.com/consensys/gnark/frontend"
@@ -33,11 +32,15 @@ func TestProcessNullification(t *testing.T) {
 	testData := prepareTestData(assert)
 
 	input := utils.NullificationInput{
-		Mask:       testData.mask,
-		InvMask:    testData.invMask,
-		SecretData: testData.secretData,
-		Response:   testData.response,
-		Nullifier:  testData.nullifier,
+		Response:        testData.response,
+		SecretData:      testData.secretData,
+		Nullifier:       testData.nullifier,
+		Mask:            testData.mask,
+		InvMask:         testData.invMask,
+		ServerPublicKey: testData.proof.serverPublicKey,
+		VG:              testData.proof.vg,
+		VH:              testData.proof.vh,
+		R:               testData.proof.r,
 	}
 
 	assignment := ProcessNullificationCircuit{
@@ -59,12 +62,19 @@ func hashToCurve(data []byte) *tbn254.PointAffine {
 	return multiplicationResult
 }
 
+type proof struct {
+	serverPublicKey twistededwards.Point
+	vg, vh          twistededwards.Point
+	r               *big.Int
+}
+
 type testData struct {
 	response   twistededwards.Point
 	secretData *big.Int
 	nullifier  twistededwards.Point
 	mask       *big.Int
 	invMask    *big.Int
+	proof      *proof
 }
 
 func prepareTestData(assert *test.Assert) testData {
@@ -72,7 +82,7 @@ func prepareTestData(assert *test.Assert) testData {
 	secretData := (&big.Int{}).SetBytes([]byte("alex@reclaimprotocol.org"))
 
 	// random mask
-	r, _ := rand.Int(rand.Reader, scalarField)
+	mask, _ := rand.Int(rand.Reader, scalarField)
 
 	sk, _ := rand.Int(rand.Reader, scalarField)
 	serverPublic := &tbn254.PointAffine{}
@@ -83,7 +93,7 @@ func prepareTestData(assert *test.Assert) testData {
 
 	// mask
 	masked := &tbn254.PointAffine{}
-	masked.ScalarMultiplication(H, r) // H*r
+	masked.ScalarMultiplication(H, mask) // H*r
 
 	// server part
 	resp := &tbn254.PointAffine{}
@@ -91,7 +101,7 @@ func prepareTestData(assert *test.Assert) testData {
 
 	// nullifier calc
 	invR := new(big.Int)
-	invR.ModInverse(r, scalarField) // r^-1
+	invR.ModInverse(mask, scalarField) // r^-1
 
 	nullifier := &tbn254.PointAffine{}
 	nullifier.ScalarMultiplication(resp, invR) // H *r * sk * r^-1 = H * sk
@@ -101,14 +111,20 @@ func prepareTestData(assert *test.Assert) testData {
 
 	assert.True(testNullifier.Equal(nullifier))
 
-	ProveDLEQ(assert, sk, serverPublic, resp, masked)
+	vg, vh, r := ProveDLEQ(assert, sk, serverPublic, resp, masked)
 
 	return testData{
 		response:   OutPointToInPoint(resp),
 		secretData: secretData,
 		nullifier:  OutPointToInPoint(nullifier),
-		mask:       r,
+		mask:       mask,
 		invMask:    invR,
+		proof: &proof{
+			serverPublicKey: OutPointToInPoint(serverPublic),
+			vg:              OutPointToInPoint(vg),
+			vh:              OutPointToInPoint(vh),
+			r:               r,
+		},
 	}
 }
 
@@ -136,6 +152,23 @@ func hashBN(data ...[]byte) []byte {
 	return hasher.Sum(nil)
 }
 
+func hashPoints(data ...*tbn254.PointAffine) []byte {
+	hasher := hash.MIMC_BN254.New()
+	for _, p := range data {
+		x := p.X.BigInt(new(big.Int))
+		y := p.Y.BigInt(new(big.Int))
+		_, err := hasher.Write(x.Bytes())
+		if err != nil {
+			panic(err)
+		}
+		_, err = hasher.Write(y.Bytes())
+		if err != nil {
+			panic(err)
+		}
+	}
+	return hasher.Sum(nil)
+}
+
 func TestMaskUnmask(t *testing.T) {
 	assert := test.NewAssert(t)
 	curve := tbn254.GetEdwardsCurve()
@@ -158,7 +191,7 @@ func TestMaskUnmask(t *testing.T) {
 	assert.True(deblinded.Equal(data))
 }
 
-func ProveDLEQ(assert *test.Assert, x *big.Int, xG, xH, H *tbn254.PointAffine) {
+func ProveDLEQ(assert *test.Assert, x *big.Int, xG, xH, H *tbn254.PointAffine) (*tbn254.PointAffine, *tbn254.PointAffine, *big.Int) {
 
 	// xG = G*x xH = H*x
 
@@ -168,21 +201,23 @@ func ProveDLEQ(assert *test.Assert, x *big.Int, xG, xH, H *tbn254.PointAffine) {
 	v, err := rand.Int(rand.Reader, scalarField)
 	assert.NoError(err)
 
-	vg := new(tbn254.PointAffine)
-	vg.ScalarMultiplication(&base, v) // G*v
+	vG := new(tbn254.PointAffine)
+	vG.ScalarMultiplication(&base, v) // G*v
 
-	vh := new(tbn254.PointAffine)
-	vh.ScalarMultiplication(H, v) // H*v
+	vH := new(tbn254.PointAffine)
+	vH.ScalarMultiplication(H, v) // H*v
 
-	challengeHash := hashBN(xG.Marshal(), xH.Marshal(), vg.Marshal(), vh.Marshal()) // TODO
+	challengeHash := hashPoints(vG, vH, &base, H)
 	c := new(big.Int).SetBytes(challengeHash)
-	c.Mod(c, scalarField) // ?
+	fmt.Println("challenge", c)
+	// c.Mod(c, scalarField) // ?
 
 	r := new(big.Int).Neg(c) // r = -c
 	r.Mul(r, x)              // r = -c*x
 	r.Add(r, v)              // r = v - c*x
 	r.Mod(r, scalarField)
 
+	// check proof in house
 	/*
 		vG==rG+c(xG)
 		vH==rH+c(xH)
@@ -191,13 +226,14 @@ func ProveDLEQ(assert *test.Assert, x *big.Int, xG, xH, H *tbn254.PointAffine) {
 	chg := new(tbn254.PointAffine).ScalarMultiplication(xG, c)   // G*x*c
 
 	rg.Add(rg, chg) // G * (v-c*x) + G*x*c =G*v − G*c*x + G*c*x = vG
-	assert.True(rg.Equal(vg))
+	assert.True(rg.Equal(vG))
 
 	rH := new(tbn254.PointAffine).ScalarMultiplication(H, r)  // H * r = H * (v-c*x)
 	cH := new(tbn254.PointAffine).ScalarMultiplication(xH, c) // H*x*c
 
 	cH.Add(rH, cH) // H * (v-c*x) + H*x*c =H*v − H*c*x + H*c*x = vH
-	assert.True(cH.Equal(vh))
+	assert.True(cH.Equal(vH))
+	return vG, vH, r
 }
 
 func TestArithBN(t *testing.T) {
@@ -279,132 +315,4 @@ func TestArithBabyJub(t *testing.T) {
 	t6.Add(t3, t5) // G* -y + G*x + G*y = G*x
 
 	assert.True(t6.Equal(t1))
-}
-
-func proveSuccess(assert *test.Assert, sk *fr.Element, pk *bn254.G1Affine, resp *bn254.G1Affine) (term *bn254.G1Affine, res *fr.Element) {
-
-	// random element
-	x := &fr.Element{}
-	x, err := x.SetRandom()
-	assert.NoError(err)
-
-	term = &bn254.G1Affine{}
-	term.ScalarMultiplicationBase(x.BigInt(&big.Int{})) // G*x
-
-	cHash := hashBN(term.Marshal())
-	challenge := &fr.Element{}
-	err = challenge.SetBytesCanonical(cHash)
-	assert.NoError(err)
-
-	tpk := &bn254.G1Affine{}
-	err = tpk.Unmarshal(pk.Marshal()) // G*sk
-	assert.NoError(err)
-
-	tc := tpk.ScalarMultiplication(tpk, challenge.BigInt(&big.Int{})) // G*sk*challenge
-	tc.Add(term, tc)                                                  // G*sk*challenge + G*x
-
-	res = &fr.Element{}
-	res.Mul(sk, challenge) // sk*challenge
-	res.Add(res, x)        // sk*challenge + x
-
-	tres := &bn254.G1Affine{}
-	tres.ScalarMultiplicationBase(res.BigInt(&big.Int{})) // G*(sk*challenge + x)
-
-	assert.True(tres.Equal(tc))
-
-	return
-	/*blindX := randomZ()
-
-	term1 := hs0.ScalarMult(blindX.Bytes())
-	term2 := hs1.ScalarMult(blindX.Bytes())
-	term3 := new(Point).ScalarBaseMult(blindX.Bytes())
-
-	//challenge = group.hash((self.X, self.G, c0, c1, term1, term2, term3), target_type=ZR)
-
-	challenge := hashZ(proofOk, kp.PublicKey, curveG, c0.Marshal(), c1.Marshal(), term1.Marshal(), term2.Marshal(), term3.Marshal())
-	res := gf.Add(blindX, gf.MulBytes(kp.PrivateKey, challenge))
-
-	return &VerifyPasswordResponse_Success{
-		Success: &ProofOfSuccess{
-			Term1:  term1.Marshal(),
-			Term2:  term2.Marshal(),
-			Term3:  term3.Marshal(),
-			BlindX: padZ(res.Bytes()),
-		},
-	}*/
-}
-
-func VerifyProof(assert *test.Assert, pk *bn254.G1Affine, term *bn254.G1Affine, res *fr.Element) {
-
-	assert.True(term.IsOnCurve())
-	assert.True(pk.IsOnCurve())
-
-	cHash := hashBN(term.Marshal())
-	challenge := &fr.Element{}
-	err := challenge.SetBytesCanonical(cHash)
-	assert.NoError(err)
-
-	tpk := &bn254.G1Affine{}
-	err = tpk.Unmarshal(pk.Marshal()) // G*sk
-	assert.NoError(err)
-
-	t1Point := tpk.ScalarMultiplication(tpk, challenge.BigInt(&big.Int{})) // G*sk * challenge
-	t1Point.Add(t1Point, term)                                             // G*sk * challenge + G*x
-
-	t2Point := &bn254.G1Affine{}
-	t2Point.ScalarMultiplicationBase(res.BigInt(&big.Int{})) // G*res = G (sk * challenge + x)
-	assert.True(t1Point.Equal(t2Point))
-
-	/*t1 = term3.Add(c.serverPublicKey.ScalarMultInt(challenge))
-	t2 = new(Point).ScalarBaseMultInt(blindX)
-
-	if !t1.Equal(t2) {
-		return false
-	}*/
-
-	/*func (c *Client) validateProofOfSuccess(proof *ProofOfSuccess, nonce []byte, c0 *Point, c1 *Point, c0b, c1b []byte) bool {
-
-		term1, term2, term3, blindX, err := proof.validate()
-
-		if err != nil {
-			return false
-		}
-
-		hs0 := hashToPoint(dhs0, nonce)
-		hs1 := hashToPoint(dhs1, nonce)
-
-		challenge := hashZ(proofOk, c.serverPublicKeyBytes, curveG, c0b, c1b, proof.Term1, proof.Term2, proof.Term3)
-
-		//if term1 * (c0 ** challenge) != hs0 ** blind_x:
-		// return False
-
-		t1 := term1.Add(c0.ScalarMultInt(challenge))
-		t2 := hs0.ScalarMultInt(blindX)
-
-		if !t1.Equal(t2) {
-			return false
-		}
-
-		// if term2 * (c1 ** challenge) != hs1 ** blind_x:
-		// return False
-
-		t1 = term2.Add(c1.ScalarMultInt(challenge))
-		t2 = hs1.ScalarMultInt(blindX)
-
-		if !t1.Equal(t2) {
-			return false
-		}
-
-		//if term3 * (self.X ** challenge) != self.G ** blind_x:
-		// return False
-
-		t1 = term3.Add(c.serverPublicKey.ScalarMultInt(challenge))
-		t2 = new(Point).ScalarBaseMultInt(blindX)
-
-		if !t1.Equal(t2) {
-			return false
-		}
-
-		return true
-	}*/
 }
