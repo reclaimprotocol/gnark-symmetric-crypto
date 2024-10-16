@@ -193,6 +193,11 @@ func ProveDLEQ(assert *test.Assert, x *big.Int, xG, xH, H *tbn254.PointAffine) {
 	rg.Add(rg, chg) // G * (v-c*x) + G*x*c =G*v − G*c*x + G*c*x = vG
 	assert.True(rg.Equal(vg))
 
+	rH := new(tbn254.PointAffine).ScalarMultiplication(H, r)  // H * r = H * (v-c*x)
+	cH := new(tbn254.PointAffine).ScalarMultiplication(xH, c) // H*x*c
+
+	cH.Add(rH, cH) // H * (v-c*x) + H*x*c =H*v − H*c*x + H*c*x = vH
+	assert.True(cH.Equal(vh))
 }
 
 func TestArithBN(t *testing.T) {
