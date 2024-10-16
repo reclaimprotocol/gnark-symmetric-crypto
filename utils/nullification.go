@@ -10,21 +10,18 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 )
 
-type NullificationInput struct {
+type Nullifier struct {
+	SecretData *big.Int
+	Mask       *big.Int
 	Response   twistededwards.Point `gnark:",public"`
-	SecretData *big.Int             // `gnark:",public"`
 	Nullifier  twistededwards.Point `gnark:",public"`
-	Mask       *big.Int             // `gnark:",public"`
-	InvMask    *big.Int             // `gnark:",public"`
-
 	// Proof of DLEQ that Response was created with the same private key as server public key
 	ServerPublicKey twistededwards.Point `gnark:",public"`
-	VG              twistededwards.Point `gnark:",public"`
-	VH              twistededwards.Point `gnark:",public"`
-	R               *big.Int             `gnark:",public"`
+	Challenge       *big.Int             `gnark:",public"`
+	Proof           *big.Int             `gnark:",public"`
 }
 
-func ProcessNullification(api frontend.API, input NullificationInput) error {
+func (n *Nullifier) Define(api frontend.API) error {
 	curve, err := twistededwards.NewEdCurve(api, twistededwards2.BN254)
 	if err != nil {
 		return err
@@ -35,60 +32,46 @@ func ProcessNullification(api frontend.API, input NullificationInput) error {
 	}
 	helper := NewBabyFieldHelper(api)
 
-	curve.AssertIsOnCurve(input.Response)
-	curve.AssertIsOnCurve(input.Nullifier)
-	curve.AssertIsOnCurve(input.ServerPublicKey)
-	curve.AssertIsOnCurve(input.VG)
-	curve.AssertIsOnCurve(input.VH)
+	curve.AssertIsOnCurve(n.Response)
+	curve.AssertIsOnCurve(n.Nullifier)
+	curve.AssertIsOnCurve(n.ServerPublicKey)
 
 	/*babyModulus := new(BabyParams).Modulus()
 
 
-	api.AssertIsLessOrEqual(input.Mask, babyModulus)
-	api.AssertIsLessOrEqual(input.InvMask, babyModulus)
-	api.AssertIsLessOrEqual(input.SecretData, babyModulus)*/
+	api.AssertIsLessOrEqual(n.Mask, babyModulus)
+	api.AssertIsLessOrEqual(n.InvMask, babyModulus)
+	api.AssertIsLessOrEqual(n.SecretData, babyModulus)*/
 
-	mask := field.NewElement(input.Mask)
+	mask := field.NewElement(n.Mask)
 
-	dataPoint, err := hashToPoint(api, curve, field, helper, input.SecretData)
+	dataPoint, err := hashToPoint(api, curve, field, helper, n.SecretData)
 	if err != nil {
 		return err
 	}
 
-	masked := curve.ScalarMul(*dataPoint, input.Mask)
+	masked := curve.ScalarMul(*dataPoint, n.Mask)
 	curve.AssertIsOnCurve(masked)
 
-	err = checkDLEQ(api, curve, masked, input.Response, input.ServerPublicKey, input.VG, input.VH, input.R)
+	err = checkDLEQ(api, curve, masked, n.Response, n.ServerPublicKey, n.Challenge, n.Proof)
 	if err != nil {
 		return err
 	}
 
 	invMask := helper.packScalarToVar(field.Inverse(mask))
-	api.AssertIsEqual(invMask, input.InvMask)
-	unMasked := curve.ScalarMul(input.Response, invMask)
+	unMasked := curve.ScalarMul(n.Response, invMask)
 
-	api.AssertIsEqual(input.Nullifier.X, unMasked.X)
-	api.AssertIsEqual(input.Nullifier.Y, unMasked.Y)
+	api.AssertIsEqual(n.Nullifier.X, unMasked.X)
+	api.AssertIsEqual(n.Nullifier.Y, unMasked.Y)
 
 	return nil
 }
 
-func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, ServerPublicKey, vg, vh twistededwards.Point, r frontend.Variable) error {
+func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, ServerPublicKey twistededwards.Point, challenge, r frontend.Variable) error {
 	hField, err := mimc.NewMiMC(api)
 	if err != nil {
 		return err
 	}
-	hField.Write(vg.X)
-	hField.Write(vg.Y)
-	hField.Write(vh.X)
-	hField.Write(vh.Y)
-	hField.Write(curve.Params().Base[0])
-	hField.Write(curve.Params().Base[1])
-	hField.Write(masked.X)
-	hField.Write(masked.Y)
-
-	challenge := hField.Sum()
-	hField.Reset()
 
 	basePoint := twistededwards.Point{
 		X: curve.Params().Base[0],
@@ -99,14 +82,29 @@ func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, S
 	chG := curve.ScalarMul(ServerPublicKey, challenge)
 
 	t1 := curve.Add(rG, chG)
-	api.AssertIsEqual(t1.X, vg.X)
-	api.AssertIsEqual(t1.Y, vg.Y)
 
 	rH := curve.ScalarMul(masked, r)
 	cH := curve.ScalarMul(response, challenge)
 	t2 := curve.Add(rH, cH)
-	api.AssertIsEqual(t2.X, vh.X)
-	api.AssertIsEqual(t2.Y, vh.Y)
+
+	hField.Write(curve.Params().Base[0])
+	hField.Write(curve.Params().Base[1])
+
+	hField.Write(t1.X)
+	hField.Write(t1.Y)
+
+	hField.Write(t2.X)
+	hField.Write(t2.Y)
+
+	hField.Write(masked.X)
+	hField.Write(masked.Y)
+
+	hField.Write(response.X)
+	hField.Write(response.Y)
+
+	expectedChallenge := hField.Sum()
+	hField.Reset()
+	api.AssertIsEqual(expectedChallenge, challenge)
 	return nil
 }
 

@@ -19,43 +19,28 @@ import (
 
 var scalarField = func() *big.Int { order := tbn254.GetEdwardsCurve().Order; return &order }()
 
-type ProcessNullificationCircuit struct {
-	Input utils.NullificationInput
-}
-
-func (circuit *ProcessNullificationCircuit) Define(api frontend.API) error {
-	return utils.ProcessNullification(api, circuit.Input)
-}
-
 func TestProcessNullification(t *testing.T) {
 	assert := test.NewAssert(t)
 	testData := prepareTestData(assert)
 
-	input := utils.NullificationInput{
+	circuit := utils.Nullifier{
 		Response:        testData.response,
 		SecretData:      testData.secretData,
 		Nullifier:       testData.nullifier,
 		Mask:            testData.mask,
-		InvMask:         testData.invMask,
 		ServerPublicKey: testData.proof.serverPublicKey,
-		VG:              testData.proof.vg,
-		VH:              testData.proof.vh,
-		R:               testData.proof.r,
+		Challenge:       testData.proof.challenge,
+		Proof:           testData.proof.proof,
 	}
 
-	assignment := ProcessNullificationCircuit{
-		Input: input,
-	}
-
-	assert.CheckCircuit(&ProcessNullificationCircuit{input}, test.WithCurves(ecc.BN254), test.WithValidAssignment(&assignment))
-	cs, _ := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &assignment)
+	assert.CheckCircuit(&circuit, test.WithCurves(ecc.BN254), test.WithValidAssignment(&circuit))
+	cs, _ := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
 	fmt.Println(cs.GetNbConstraints())
 }
 
 func hashToCurve(data []byte) *tbn254.PointAffine {
 	hashedData := hashBN(data)
 	scalar := new(big.Int).SetBytes(hashedData)
-	scalar.Mod(scalar, scalarField)
 	params := tbn254.GetEdwardsCurve()
 	multiplicationResult := &tbn254.PointAffine{}
 	multiplicationResult.ScalarMultiplication(&params.Base, scalar)
@@ -64,8 +49,8 @@ func hashToCurve(data []byte) *tbn254.PointAffine {
 
 type proof struct {
 	serverPublicKey twistededwards.Point
-	vg, vh          twistededwards.Point
-	r               *big.Int
+	challenge       *big.Int
+	proof           *big.Int
 }
 
 type testData struct {
@@ -84,6 +69,7 @@ func prepareTestData(assert *test.Assert) testData {
 	// random mask
 	mask, _ := rand.Int(rand.Reader, scalarField)
 
+	// server secret & public
 	sk, _ := rand.Int(rand.Reader, scalarField)
 	serverPublic := &tbn254.PointAffine{}
 	serverPublic.ScalarMultiplication(&curve.Base, sk) // G*sk
@@ -93,25 +79,20 @@ func prepareTestData(assert *test.Assert) testData {
 
 	// mask
 	masked := &tbn254.PointAffine{}
-	masked.ScalarMultiplication(H, mask) // H*r
+	masked.ScalarMultiplication(H, mask) // H*proof
 
 	// server part
 	resp := &tbn254.PointAffine{}
-	resp.ScalarMultiplication(masked, sk) // H*r*sk
+	resp.ScalarMultiplication(masked, sk) // H*proof*sk
 
 	// nullifier calc
 	invR := new(big.Int)
-	invR.ModInverse(mask, scalarField) // r^-1
+	invR.ModInverse(mask, scalarField) // proof^-1
 
 	nullifier := &tbn254.PointAffine{}
-	nullifier.ScalarMultiplication(resp, invR) // H *r * sk * r^-1 = H * sk
+	nullifier.ScalarMultiplication(resp, invR) // H *proof * sk * proof^-1 = H * sk
 
-	testNullifier := &tbn254.PointAffine{}
-	testNullifier.ScalarMultiplication(H, sk)
-
-	assert.True(testNullifier.Equal(nullifier))
-
-	vg, vh, r := ProveDLEQ(assert, sk, serverPublic, resp, masked)
+	c, r := ProveDLEQ(assert, sk, serverPublic, resp, masked)
 
 	return testData{
 		response:   OutPointToInPoint(resp),
@@ -121,9 +102,8 @@ func prepareTestData(assert *test.Assert) testData {
 		invMask:    invR,
 		proof: &proof{
 			serverPublicKey: OutPointToInPoint(serverPublic),
-			vg:              OutPointToInPoint(vg),
-			vh:              OutPointToInPoint(vh),
-			r:               r,
+			challenge:       c,
+			proof:           r,
 		},
 	}
 }
@@ -191,7 +171,7 @@ func TestMaskUnmask(t *testing.T) {
 	assert.True(deblinded.Equal(data))
 }
 
-func ProveDLEQ(assert *test.Assert, x *big.Int, xG, xH, H *tbn254.PointAffine) (*tbn254.PointAffine, *tbn254.PointAffine, *big.Int) {
+func ProveDLEQ(assert *test.Assert, x *big.Int, xG, xH, H *tbn254.PointAffine) (*big.Int, *big.Int) {
 
 	// xG = G*x xH = H*x
 
@@ -207,13 +187,13 @@ func ProveDLEQ(assert *test.Assert, x *big.Int, xG, xH, H *tbn254.PointAffine) (
 	vH := new(tbn254.PointAffine)
 	vH.ScalarMultiplication(H, v) // H*v
 
-	challengeHash := hashPoints(vG, vH, &base, H)
+	challengeHash := hashPoints(&base, vG, vH, H, xH)
 	c := new(big.Int).SetBytes(challengeHash)
 	// c.Mod(c, scalarField) // ?
 
-	r := new(big.Int).Neg(c) // r = -c
-	r.Mul(r, x)              // r = -c*x
-	r.Add(r, v)              // r = v - c*x
+	r := new(big.Int).Neg(c) // proof = -c
+	r.Mul(r, x)              // proof = -c*x
+	r.Add(r, v)              // proof = v - c*x
 	r.Mod(r, scalarField)
 
 	// check proof in house
@@ -221,18 +201,23 @@ func ProveDLEQ(assert *test.Assert, x *big.Int, xG, xH, H *tbn254.PointAffine) (
 		vG==rG+c(xG)
 		vH==rH+c(xH)
 	*/
-	rg := new(tbn254.PointAffine).ScalarMultiplication(&base, r) // G * r = G * (v-c*x)
+	rg := new(tbn254.PointAffine).ScalarMultiplication(&base, r) // G * proof = G * (v-c*x)
 	chg := new(tbn254.PointAffine).ScalarMultiplication(xG, c)   // G*x*c
 
 	rg.Add(rg, chg) // G * (v-c*x) + G*x*c =G*v − G*c*x + G*c*x = vG
 	assert.True(rg.Equal(vG))
 
-	rH := new(tbn254.PointAffine).ScalarMultiplication(H, r)  // H * r = H * (v-c*x)
+	rH := new(tbn254.PointAffine).ScalarMultiplication(H, r)  // H * proof = H * (v-c*x)
 	cH := new(tbn254.PointAffine).ScalarMultiplication(xH, c) // H*x*c
 
 	cH.Add(rH, cH) // H * (v-c*x) + H*x*c =H*v − H*c*x + H*c*x = vH
 	assert.True(cH.Equal(vH))
-	return vG, vH, r
+
+	verifyHash := hashPoints(&base, rg, cH, H, xH)
+	verifyNum := new(big.Int).SetBytes(verifyHash)
+	assert.Equal(verifyNum, c)
+
+	return c, r
 }
 
 func TestArithBN(t *testing.T) {
