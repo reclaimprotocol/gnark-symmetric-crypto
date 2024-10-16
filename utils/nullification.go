@@ -34,10 +34,16 @@ func ProcessNullification(api frontend.API, input NullificationInput) error {
 		return err
 	}
 	helper := NewBabyFieldHelper(api)
-	/*babyModulus := new(BabyParams).Modulus()
 
 	curve.AssertIsOnCurve(input.Response)
 	curve.AssertIsOnCurve(input.Nullifier)
+	curve.AssertIsOnCurve(input.ServerPublicKey)
+	curve.AssertIsOnCurve(input.VG)
+	curve.AssertIsOnCurve(input.VH)
+
+	/*babyModulus := new(BabyParams).Modulus()
+
+
 	api.AssertIsLessOrEqual(input.Mask, babyModulus)
 	api.AssertIsLessOrEqual(input.InvMask, babyModulus)
 	api.AssertIsLessOrEqual(input.SecretData, babyModulus)*/
@@ -82,7 +88,6 @@ func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, S
 	hField.Write(masked.Y)
 
 	challenge := hField.Sum()
-	api.Println(challenge)
 	hField.Reset()
 
 	basePoint := twistededwards.Point{

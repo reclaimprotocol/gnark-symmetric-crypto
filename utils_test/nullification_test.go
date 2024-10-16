@@ -209,7 +209,6 @@ func ProveDLEQ(assert *test.Assert, x *big.Int, xG, xH, H *tbn254.PointAffine) (
 
 	challengeHash := hashPoints(vG, vH, &base, H)
 	c := new(big.Int).SetBytes(challengeHash)
-	fmt.Println("challenge", c)
 	// c.Mod(c, scalarField) // ?
 
 	r := new(big.Int).Neg(c) // r = -c
