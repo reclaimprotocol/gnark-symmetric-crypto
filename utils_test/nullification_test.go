@@ -14,7 +14,7 @@ import (
 	"github.com/consensys/gnark-crypto/hash"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
-	twistededwards2 "github.com/consensys/gnark/std/algebra/native/twistededwards"
+	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/consensys/gnark/test"
 )
 
@@ -52,9 +52,7 @@ func TestProcessNullification(t *testing.T) {
 func hashToCurve(data []byte) *tbn254.PointAffine {
 	hashedData := hashBN(data)
 	scalar := new(big.Int).SetBytes(hashedData)
-	fmt.Println(scalar)
 	scalar.Mod(scalar, scalarField)
-	fmt.Println(scalar)
 	params := tbn254.GetEdwardsCurve()
 	multiplicationResult := &tbn254.PointAffine{}
 	multiplicationResult.ScalarMultiplication(&params.Base, scalar)
@@ -62,9 +60,9 @@ func hashToCurve(data []byte) *tbn254.PointAffine {
 }
 
 type testData struct {
-	response   twistededwards2.Point
+	response   twistededwards.Point
 	secretData *big.Int
-	nullifier  twistededwards2.Point
+	nullifier  twistededwards.Point
 	mask       *big.Int
 	invMask    *big.Int
 }
@@ -92,20 +90,21 @@ func prepareTestData(assert *test.Assert) testData {
 	// nullifier calc
 	invR := new(big.Int)
 	invR.ModInverse(r, scalarField)
-	deblinded := &tbn254.PointAffine{}
-	deblinded.ScalarMultiplication(resp, invR)
+
+	nullifier := &tbn254.PointAffine{}
+	nullifier.ScalarMultiplication(resp, invR)
 
 	return testData{
 		response:   OutPointToInPoint(resp),
 		secretData: secretData,
-		nullifier:  OutPointToInPoint(deblinded),
+		nullifier:  OutPointToInPoint(nullifier),
 		mask:       r,
 		invMask:    invR,
 	}
 }
 
-func OutPointToInPoint(point *tbn254.PointAffine) twistededwards2.Point {
-	res := twistededwards2.Point{
+func OutPointToInPoint(point *tbn254.PointAffine) twistededwards.Point {
+	res := twistededwards.Point{
 		X: point.X.BigInt(&big.Int{}),
 		Y: point.Y.BigInt(&big.Int{}),
 	}
