@@ -11,11 +11,11 @@ import (
 )
 
 type NullificationInput struct {
-	// Signature      eddsa.Signature   `gnark:",public"`
 	Response   twistededwards.Point `gnark:",public"`
 	SecretData *big.Int             `gnark:",public"`
 	Nullifier  twistededwards.Point `gnark:",public"`
 	Mask       *big.Int             `gnark:",public"`
+	InvMask    *big.Int             `gnark:",public"`
 }
 
 func ProcessNullification(api frontend.API, input NullificationInput) error {
@@ -28,31 +28,22 @@ func ProcessNullification(api frontend.API, input NullificationInput) error {
 		return err
 	}
 	helper := NewBabyFieldHelper(api)
+	mask := field.NewElement(input.Mask)
 
-	basePoint := twistededwards.Point{
-		X: curve.Params().Base[0],
-		Y: curve.Params().Base[1],
-	}
-
-	hField, err := mimc.NewMiMC(api)
+	dataPoint, err := hashToPoint(api, curve, input.SecretData)
 	if err != nil {
 		return err
 	}
-	hField.Write(input.SecretData)
-	hashedSecretData := hField.Sum()
-	hField.Reset()
 
-	dataPoint := curve.ScalarMul(basePoint, hashedSecretData)
+	masked := curve.ScalarMul(*dataPoint, input.Mask)
+	curve.AssertIsOnCurve(masked)
 
-	mask := field.NewElement(input.Mask)
-
-	masked := curve.ScalarMul(dataPoint, input.Mask)
 	invMask := helper.packScalarToVar(field.Inverse(mask))
+	api.AssertIsEqual(invMask, input.InvMask)
+	unMasked := curve.ScalarMul(input.Response, invMask)
 
-	unMasked := curve.ScalarMul(masked, invMask)
-
-	api.AssertIsEqual(dataPoint.X, unMasked.X)
-	api.AssertIsEqual(dataPoint.Y, unMasked.Y)
+	api.AssertIsEqual(input.Nullifier.X, unMasked.X)
+	api.AssertIsEqual(input.Nullifier.Y, unMasked.Y)
 
 	/*hField, err := mimc.NewMiMC(api)
 	if err != nil {
@@ -94,4 +85,21 @@ func ProcessNullification(api frontend.API, input NullificationInput) error {
 	calculatedNullifier := api.Mul(input.MishtiResponse, api.Inverse(input.Mask))
 	api.AssertIsEqual(input.Nullifier, calculatedNullifier)*/
 	return nil
+}
+
+func hashToPoint(api frontend.API, curve twistededwards.Curve, data frontend.Variable) (*twistededwards.Point, error) {
+	hField, err := mimc.NewMiMC(api)
+	if err != nil {
+		return nil, err
+	}
+	hField.Write(data)
+	hashedSecretData := hField.Sum()
+	hField.Reset()
+	api.Println(hashedSecretData)
+	basePoint := twistededwards.Point{
+		X: curve.Params().Base[0],
+		Y: curve.Params().Base[1],
+	}
+	dataPoint := curve.ScalarMul(basePoint, hashedSecretData)
+	return &dataPoint, nil
 }

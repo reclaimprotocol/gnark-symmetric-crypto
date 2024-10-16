@@ -8,19 +8,17 @@ import (
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark-crypto/ecc/bn254"
+	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
-	"github.com/consensys/gnark-crypto/ecc/twistededwards"
 	"github.com/consensys/gnark-crypto/hash"
-	"github.com/consensys/gnark-crypto/signature"
-	gnarkeddsa "github.com/consensys/gnark-crypto/signature/eddsa"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	twistededwards2 "github.com/consensys/gnark/std/algebra/native/twistededwards"
-	"github.com/consensys/gnark/std/signature/eddsa"
 	"github.com/consensys/gnark/test"
 )
 
-var scalarField = ecc.BN254.ScalarField()
+var scalarField = func() *big.Int { order := tbn254.GetEdwardsCurve().Order; return &order }()
 
 type ProcessNullificationCircuit struct {
 	Input utils.NullificationInput
@@ -32,22 +30,14 @@ func (circuit *ProcessNullificationCircuit) Define(api frontend.API) error {
 
 func TestProcessNullification(t *testing.T) {
 	assert := test.NewAssert(t)
-	testData := prepareTestData()
-
-	H := hashToCurve(testData.secretData.Bytes())
-	assert.Equal(true, H.IsOnCurve())
+	testData := prepareTestData(assert)
 
 	input := utils.NullificationInput{
-		Mask:       testData.r,
+		Mask:       testData.mask,
+		InvMask:    testData.invMask,
 		SecretData: testData.secretData,
-		Response: twistededwards2.Point{
-			X: H.X.BigInt(&big.Int{}),
-			Y: H.Y.BigInt(&big.Int{}),
-		},
-		Nullifier: twistededwards2.Point{
-			X: H.X.BigInt(&big.Int{}),
-			Y: H.Y.BigInt(&big.Int{}),
-		},
+		Response:   testData.response,
+		Nullifier:  testData.nullifier,
 	}
 
 	assignment := ProcessNullificationCircuit{
@@ -59,58 +49,67 @@ func TestProcessNullification(t *testing.T) {
 	fmt.Println(cs.GetNbConstraints())
 }
 
-func hashToCurve(data []byte) tbn254.PointAffine {
+func hashToCurve(data []byte) *tbn254.PointAffine {
 	hashedData := hashBN(data)
 	scalar := new(big.Int).SetBytes(hashedData)
+	fmt.Println(scalar)
+	scalar.Mod(scalar, scalarField)
+	fmt.Println(scalar)
 	params := tbn254.GetEdwardsCurve()
-	var multiplicationResult tbn254.PointAffine
+	multiplicationResult := &tbn254.PointAffine{}
 	multiplicationResult.ScalarMultiplication(&params.Base, scalar)
 	return multiplicationResult
 }
 
 type testData struct {
-	privateKey     signature.Signer
-	publicKey      signature.PublicKey
-	secretData     *big.Int
-	mishtiResponse *big.Int
-	r              *big.Int
+	response   twistededwards2.Point
+	secretData *big.Int
+	nullifier  twistededwards2.Point
+	mask       *big.Int
+	invMask    *big.Int
 }
 
-func prepareTestData() testData {
-	mishtiResponse, _ := new(big.Int).SetString("10110291770324934936175892571039775697749083457971239981851098944223339000212", 10)
-	var t tbn254.PointAffine
-	_, err := t.SetBytes(mishtiResponse.Bytes())
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(t.IsOnCurve())
-	t.Marshal()
-
-	privateKey, _ := gnarkeddsa.New(twistededwards.BN254, rand.Reader)
-	pubKey := privateKey.Public()
-
-	secretData, _ := new(big.Int).SetString("123", 10)
+func prepareTestData(assert *test.Assert) testData {
+	curve := tbn254.GetEdwardsCurve()
+	secretData := (&big.Int{}).SetBytes([]byte("alex@reclaimprotocol.org"))
 	r, _ := rand.Int(rand.Reader, scalarField)
+
+	serverPrivate, _ := rand.Int(rand.Reader, scalarField)
+	serverPublic := &tbn254.PointAffine{}
+	serverPublic.ScalarMultiplication(&curve.Base, serverPrivate)
+
+	dataPoint := hashToCurve(secretData.Bytes())
+	assert.True(dataPoint.IsOnCurve())
+
+	// mask
+	masked := &tbn254.PointAffine{}
+	masked.ScalarMultiplication(dataPoint, r)
+
+	// server part
+	resp := &tbn254.PointAffine{}
+	resp.ScalarMultiplication(masked, serverPrivate)
+
+	// nullifier calc
+	invR := new(big.Int)
+	invR.ModInverse(r, scalarField)
+	deblinded := &tbn254.PointAffine{}
+	deblinded.ScalarMultiplication(resp, invR)
+
 	return testData{
-		privateKey:     privateKey,
-		publicKey:      pubKey,
-		secretData:     secretData,
-		mishtiResponse: mishtiResponse,
-		r:              r,
+		response:   OutPointToInPoint(resp),
+		secretData: secretData,
+		nullifier:  OutPointToInPoint(deblinded),
+		mask:       r,
+		invMask:    invR,
 	}
 }
 
-func castToEddsaSignature(signatureOf []byte) eddsa.Signature {
-	_signature := new(eddsa.Signature)
-	_signature.Assign(twistededwards.BN254, signatureOf)
-	return *_signature
-}
-
-func castToEddsaPublicKey(pubKey signature.PublicKey) eddsa.PublicKey {
-	_publicKeyBytes := pubKey.Bytes()
-	_publicKey := new(eddsa.PublicKey)
-	_publicKey.Assign(twistededwards.BN254, _publicKeyBytes)
-	return *_publicKey
+func OutPointToInPoint(point *tbn254.PointAffine) twistededwards2.Point {
+	res := twistededwards2.Point{
+		X: point.X.BigInt(&big.Int{}),
+		Y: point.Y.BigInt(&big.Int{}),
+	}
+	return res
 }
 
 func hashBN(data ...[]byte) []byte {
@@ -121,15 +120,6 @@ func hashBN(data ...[]byte) []byte {
 	return hasher.Sum(nil)
 }
 
-func signAndVerify(assert *test.Assert, message []byte, privateKey signature.Signer, publicKey signature.PublicKey) []byte {
-	signatureOf, err := privateKey.Sign(message, hash.MIMC_BN254.New())
-	assert.NoError(err, "signing message")
-	checkSig, err := publicKey.Verify(signatureOf, message, hash.MIMC_BN254.New())
-	assert.NoError(err, "verifying signature")
-	assert.True(checkSig, "signature verification failed")
-	return signatureOf
-}
-
 func TestMaskUnmask(t *testing.T) {
 	assert := test.NewAssert(t)
 	curve := tbn254.GetEdwardsCurve()
@@ -138,40 +128,144 @@ func TestMaskUnmask(t *testing.T) {
 	data.ScalarMultiplication(&base, big.NewInt(12345)) // just dummy data
 
 	// random scalar
-	r, err := rand.Int(rand.Reader, &curve.Order)
+	r, err := rand.Int(rand.Reader, scalarField)
 	assert.NoError(err)
 
 	blinded := &tbn254.PointAffine{}
 	blinded.ScalarMultiplication(data, r)
 
-	invR := r.ModInverse(r, &curve.Order)
+	invR := &big.Int{}
+	invR.ModInverse(r, scalarField)
 	deblinded := &tbn254.PointAffine{}
 	deblinded.ScalarMultiplication(blinded, invR)
-
+	fmt.Println(r, invR)
 	assert.True(deblinded.Equal(data))
 }
 
-// Decompose decomposes the input into res as integers of width nbBits. It
-// errors if the decomposition does not fit into res or if res is uninitialized.
-//
-// The following holds
-//
-//	input = \sum_{i=0}^{len(res)} res[i] * 2^{nbBits * i}
-func Decompose(input *big.Int, nbBits uint, res []*big.Int) error {
-	// limb modulus
-	if input.BitLen() > len(res)*int(nbBits) {
-		return fmt.Errorf("decomposed integer does not fit into res")
-	}
-	for _, r := range res {
-		if r == nil {
-			return fmt.Errorf("result slice element uninitialized")
+func proveSuccess(assert *test.Assert, sk *fr.Element, pk *bn254.G1Affine, resp *bn254.G1Affine) (term *bn254.G1Affine, res *fr.Element) {
+
+	// random element
+	x := &fr.Element{}
+	x, err := x.SetRandom()
+	assert.NoError(err)
+
+	term = &bn254.G1Affine{}
+	term.ScalarMultiplicationBase(x.BigInt(&big.Int{})) // G*x
+
+	cHash := hashBN(term.Marshal())
+	challenge := &fr.Element{}
+	err = challenge.SetBytesCanonical(cHash)
+	assert.NoError(err)
+
+	tpk := &bn254.G1Affine{}
+	err = tpk.Unmarshal(pk.Marshal()) // G*sk
+	assert.NoError(err)
+
+	tc := tpk.ScalarMultiplication(tpk, challenge.BigInt(&big.Int{})) // G*sk*challenge
+	tc.Add(term, tc)                                                  // G*sk*challenge + G*x
+
+	res = &fr.Element{}
+	res.Mul(sk, challenge) // sk*challenge
+	res.Add(res, x)        // sk*challenge + x
+
+	tres := &bn254.G1Affine{}
+	tres.ScalarMultiplicationBase(res.BigInt(&big.Int{})) // G*(sk*challenge + x)
+
+	assert.True(tres.Equal(tc))
+
+	return
+	/*blindX := randomZ()
+
+	term1 := hs0.ScalarMult(blindX.Bytes())
+	term2 := hs1.ScalarMult(blindX.Bytes())
+	term3 := new(Point).ScalarBaseMult(blindX.Bytes())
+
+	//challenge = group.hash((self.X, self.G, c0, c1, term1, term2, term3), target_type=ZR)
+
+	challenge := hashZ(proofOk, kp.PublicKey, curveG, c0.Marshal(), c1.Marshal(), term1.Marshal(), term2.Marshal(), term3.Marshal())
+	res := gf.Add(blindX, gf.MulBytes(kp.PrivateKey, challenge))
+
+	return &VerifyPasswordResponse_Success{
+		Success: &ProofOfSuccess{
+			Term1:  term1.Marshal(),
+			Term2:  term2.Marshal(),
+			Term3:  term3.Marshal(),
+			BlindX: padZ(res.Bytes()),
+		},
+	}*/
+}
+
+func VerifyProof(assert *test.Assert, pk *bn254.G1Affine, term *bn254.G1Affine, res *fr.Element) {
+
+	assert.True(term.IsOnCurve())
+	assert.True(pk.IsOnCurve())
+
+	cHash := hashBN(term.Marshal())
+	challenge := &fr.Element{}
+	err := challenge.SetBytesCanonical(cHash)
+	assert.NoError(err)
+
+	tpk := &bn254.G1Affine{}
+	err = tpk.Unmarshal(pk.Marshal()) // G*sk
+	assert.NoError(err)
+
+	t1Point := tpk.ScalarMultiplication(tpk, challenge.BigInt(&big.Int{}))
+	t1Point.Add(t1Point, term)
+
+	t2Point := &bn254.G1Affine{}
+	t2Point.ScalarMultiplicationBase(res.BigInt(&big.Int{}))
+	assert.True(t1Point.Equal(t2Point))
+
+	/*t1 = term3.Add(c.serverPublicKey.ScalarMultInt(challenge))
+	t2 = new(Point).ScalarBaseMultInt(blindX)
+
+	if !t1.Equal(t2) {
+		return false
+	}*/
+
+	/*func (c *Client) validateProofOfSuccess(proof *ProofOfSuccess, nonce []byte, c0 *Point, c1 *Point, c0b, c1b []byte) bool {
+
+		term1, term2, term3, blindX, err := proof.validate()
+
+		if err != nil {
+			return false
 		}
-	}
-	base := new(big.Int).Lsh(big.NewInt(1), nbBits)
-	tmp := new(big.Int).Set(input)
-	for i := 0; i < len(res); i++ {
-		res[i].Mod(tmp, base)
-		tmp.Rsh(tmp, nbBits)
-	}
-	return nil
+
+		hs0 := hashToPoint(dhs0, nonce)
+		hs1 := hashToPoint(dhs1, nonce)
+
+		challenge := hashZ(proofOk, c.serverPublicKeyBytes, curveG, c0b, c1b, proof.Term1, proof.Term2, proof.Term3)
+
+		//if term1 * (c0 ** challenge) != hs0 ** blind_x:
+		// return False
+
+		t1 := term1.Add(c0.ScalarMultInt(challenge))
+		t2 := hs0.ScalarMultInt(blindX)
+
+		if !t1.Equal(t2) {
+			return false
+		}
+
+		// if term2 * (c1 ** challenge) != hs1 ** blind_x:
+		// return False
+
+		t1 = term2.Add(c1.ScalarMultInt(challenge))
+		t2 = hs1.ScalarMultInt(blindX)
+
+		if !t1.Equal(t2) {
+			return false
+		}
+
+		//if term3 * (self.X ** challenge) != self.G ** blind_x:
+		// return False
+
+		t1 = term3.Add(c.serverPublicKey.ScalarMultInt(challenge))
+		t2 = new(Point).ScalarBaseMultInt(blindX)
+
+		if !t1.Equal(t2) {
+			return false
+		}
+
+		return true
+	}*/
 }
