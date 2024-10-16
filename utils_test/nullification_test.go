@@ -11,15 +11,18 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	"github.com/consensys/gnark-crypto/hash"
+	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/consensys/gnark/test"
+	"github.com/rs/zerolog"
 )
 
 var scalarField = func() *big.Int { order := tbn254.GetEdwardsCurve().Order; return &order }()
 
 func TestProcessNullification(t *testing.T) {
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	assert := test.NewAssert(t)
 	testData := prepareTestData(assert)
 
@@ -34,8 +37,38 @@ func TestProcessNullification(t *testing.T) {
 	}
 
 	assert.CheckCircuit(&circuit, test.WithCurves(ecc.BN254), test.WithValidAssignment(&circuit))
-	cs, _ := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
+	cs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
+	assert.NoError(err)
 	fmt.Println(cs.GetNbConstraints())
+
+	pk, vk, err := groth16.Setup(cs)
+	assert.NoError(err)
+
+	witness := utils.Nullifier{
+		Response:        testData.response,
+		SecretData:      testData.secretData,
+		Nullifier:       testData.nullifier,
+		Mask:            testData.mask,
+		ServerPublicKey: testData.proof.serverPublicKey,
+		Challenge:       testData.proof.challenge,
+		Proof:           testData.proof.proof,
+	}
+	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
+	assert.NoError(err)
+	gProof, err := groth16.Prove(cs, pk, wtns)
+	assert.NoError(err)
+
+	pubWitness := utils.Nullifier{
+		Response:        testData.response,
+		Nullifier:       testData.nullifier,
+		ServerPublicKey: testData.proof.serverPublicKey,
+		Challenge:       testData.proof.challenge,
+		Proof:           testData.proof.proof,
+	}
+
+	wtns1, err := frontend.NewWitness(&pubWitness, ecc.BN254.ScalarField(), frontend.PublicOnly())
+	err = groth16.Verify(gProof, vk, wtns1)
+	assert.NoError(err)
 }
 
 func hashToCurve(data []byte) *tbn254.PointAffine {
@@ -108,69 +141,6 @@ func prepareTestData(assert *test.Assert) testData {
 	}
 }
 
-func OutPointToInPoint(point *tbn254.PointAffine) twistededwards.Point {
-	res := twistededwards.Point{
-		X: point.X.BigInt(&big.Int{}),
-		Y: point.Y.BigInt(&big.Int{}),
-	}
-	return res
-}
-
-func hashBN(data ...[]byte) []byte {
-	hasher := hash.MIMC_BN254.New()
-	for _, d := range data {
-		_, err := hasher.Write(d)
-		if err != nil {
-			r := new(big.Int).SetBytes(d)
-			r.Mod(r, scalarField)
-			_, err = hasher.Write(r.Bytes())
-			if err != nil {
-				panic(err)
-			}
-		}
-	}
-	return hasher.Sum(nil)
-}
-
-func hashPoints(data ...*tbn254.PointAffine) []byte {
-	hasher := hash.MIMC_BN254.New()
-	for _, p := range data {
-		x := p.X.BigInt(new(big.Int))
-		y := p.Y.BigInt(new(big.Int))
-		_, err := hasher.Write(x.Bytes())
-		if err != nil {
-			panic(err)
-		}
-		_, err = hasher.Write(y.Bytes())
-		if err != nil {
-			panic(err)
-		}
-	}
-	return hasher.Sum(nil)
-}
-
-func TestMaskUnmask(t *testing.T) {
-	assert := test.NewAssert(t)
-	curve := tbn254.GetEdwardsCurve()
-	data := &tbn254.PointAffine{}
-	base := curve.Base
-	data.ScalarMultiplication(&base, big.NewInt(12345)) // just dummy data
-
-	// random scalar
-	r, err := rand.Int(rand.Reader, scalarField)
-	assert.NoError(err)
-
-	blinded := &tbn254.PointAffine{}
-	blinded.ScalarMultiplication(data, r)
-
-	invR := &big.Int{}
-	invR.ModInverse(r, scalarField)
-	deblinded := &tbn254.PointAffine{}
-	deblinded.ScalarMultiplication(blinded, invR)
-	fmt.Println(r, invR)
-	assert.True(deblinded.Equal(data))
-}
-
 func ProveDLEQ(assert *test.Assert, x *big.Int, xG, xH, H *tbn254.PointAffine) (*big.Int, *big.Int) {
 
 	// xG = G*x xH = H*x
@@ -218,6 +188,64 @@ func ProveDLEQ(assert *test.Assert, x *big.Int, xG, xH, H *tbn254.PointAffine) (
 	assert.Equal(verifyNum, c)
 
 	return c, r
+}
+
+func OutPointToInPoint(point *tbn254.PointAffine) twistededwards.Point {
+	res := twistededwards.Point{
+		X: point.X.BigInt(&big.Int{}),
+		Y: point.Y.BigInt(&big.Int{}),
+	}
+	return res
+}
+
+func hashBN(data ...[]byte) []byte {
+	hasher := hash.MIMC_BN254.New()
+	for _, d := range data {
+		_, err := hasher.Write(d)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return hasher.Sum(nil)
+}
+
+func hashPoints(data ...*tbn254.PointAffine) []byte {
+	hasher := hash.MIMC_BN254.New()
+	for _, p := range data {
+		x := p.X.BigInt(new(big.Int))
+		y := p.Y.BigInt(new(big.Int))
+		_, err := hasher.Write(x.Bytes())
+		if err != nil {
+			panic(err)
+		}
+		_, err = hasher.Write(y.Bytes())
+		if err != nil {
+			panic(err)
+		}
+	}
+	return hasher.Sum(nil)
+}
+
+func TestMaskUnmask(t *testing.T) {
+	assert := test.NewAssert(t)
+	curve := tbn254.GetEdwardsCurve()
+	data := &tbn254.PointAffine{}
+	base := curve.Base
+	data.ScalarMultiplication(&base, big.NewInt(12345)) // just dummy data
+
+	// random scalar
+	r, err := rand.Int(rand.Reader, scalarField)
+	assert.NoError(err)
+
+	blinded := &tbn254.PointAffine{}
+	blinded.ScalarMultiplication(data, r)
+
+	invR := &big.Int{}
+	invR.ModInverse(r, scalarField)
+	deblinded := &tbn254.PointAffine{}
+	deblinded.ScalarMultiplication(blinded, invR)
+	fmt.Println(r, invR)
+	assert.True(deblinded.Equal(data))
 }
 
 func TestArithBN(t *testing.T) {

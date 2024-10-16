@@ -80,15 +80,14 @@ func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, S
 
 	rG := curve.ScalarMul(basePoint, r)
 	chG := curve.ScalarMul(ServerPublicKey, challenge)
-
 	t1 := curve.Add(rG, chG)
 
 	rH := curve.ScalarMul(masked, r)
 	cH := curve.ScalarMul(response, challenge)
 	t2 := curve.Add(rH, cH)
 
-	hField.Write(curve.Params().Base[0])
-	hField.Write(curve.Params().Base[1])
+	hField.Write(basePoint.X)
+	hField.Write(basePoint.Y)
 
 	hField.Write(t1.X)
 	hField.Write(t1.Y)
