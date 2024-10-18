@@ -1,27 +1,34 @@
 package utils
 
 import (
-	"math/big"
-
 	twistededwards2 "github.com/consensys/gnark-crypto/ecc/twistededwards"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/consensys/gnark/std/hash/mimc"
+	"github.com/consensys/gnark/std/math/bits"
 	"github.com/consensys/gnark/std/math/emulated"
 )
 
-type Nullifier struct {
-	SecretData *big.Int
-	Mask       *big.Int
+type NullifierData struct {
+	SecretData frontend.Variable
+	Mask       frontend.Variable
 	Response   twistededwards.Point `gnark:",public"`
 	Nullifier  twistededwards.Point `gnark:",public"`
 	// Proof of DLEQ that Response was created with the same private key as server public key
 	ServerPublicKey twistededwards.Point `gnark:",public"`
-	Challenge       *big.Int             `gnark:",public"`
-	Proof           *big.Int             `gnark:",public"`
+	Challenge       frontend.Variable    `gnark:",public"`
+	Proof           frontend.Variable    `gnark:",public"`
+}
+
+type Nullifier struct {
+	NullifierData
 }
 
 func (n *Nullifier) Define(api frontend.API) error {
+	return CheckNullifier(api, n.NullifierData)
+}
+
+func CheckNullifier(api frontend.API, n NullifierData) error {
 	curve, err := twistededwards.NewEdCurve(api, twistededwards2.BN254)
 	if err != nil {
 		return err
@@ -43,9 +50,10 @@ func (n *Nullifier) Define(api frontend.API) error {
 	api.AssertIsLessOrEqual(n.InvMask, babyModulus)
 	api.AssertIsLessOrEqual(n.SecretData, babyModulus)*/
 
-	mask := field.NewElement(n.Mask)
+	maskBits := bits.ToBinary(api, n.Mask, bits.WithNbDigits(api.Compiler().Field().BitLen()))
+	mask := field.FromBits(maskBits...)
 
-	dataPoint, err := hashToPoint(api, curve, field, helper, n.SecretData)
+	dataPoint, err := hashToPoint(api, curve, n.SecretData)
 	if err != nil {
 		return err
 	}
@@ -107,7 +115,7 @@ func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, S
 	return nil
 }
 
-func hashToPoint(api frontend.API, curve twistededwards.Curve, field *emulated.Field[BabyParams], helper *BabyField, data frontend.Variable) (*twistededwards.Point, error) {
+func hashToPoint(api frontend.API, curve twistededwards.Curve, data frontend.Variable) (*twistededwards.Point, error) {
 	hField, err := mimc.NewMiMC(api)
 	if err != nil {
 		return nil, err
