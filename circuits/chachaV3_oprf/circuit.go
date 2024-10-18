@@ -18,7 +18,7 @@ type ChaChaCircuit struct {
 	Pos     frontend.Variable                             `gnark:",public"`
 	Size    frontend.Variable                             `gnark:",public"`
 
-	OPRF utils.NullifierData
+	OPRF *utils.NullifierData
 }
 
 func (c *ChaChaCircuit) Define(api frontend.API) error {

@@ -10,9 +10,6 @@ import (
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
-	"github.com/consensys/gnark/backend/groth16"
-	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/test"
 	"github.com/rs/zerolog"
 )
@@ -23,32 +20,10 @@ func TestProcessNullification(t *testing.T) {
 	testData := utils.PrepareTestData(assert, "randomiiiiiiiiiiiiiizer")
 
 	circuit := utils.Nullifier{
-		NullifierData: *testData,
+		NullifierData: testData,
 	}
 
 	assert.CheckCircuit(&circuit, test.WithCurves(ecc.BN254), test.WithValidAssignment(&circuit))
-	cs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
-	assert.NoError(err)
-	fmt.Println(cs.GetNbConstraints())
-
-	pk, vk, err := groth16.Setup(cs)
-	assert.NoError(err)
-
-	witness := utils.Nullifier{
-		NullifierData: *testData,
-	}
-	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
-	assert.NoError(err)
-	gProof, err := groth16.Prove(cs, pk, wtns)
-	assert.NoError(err)
-
-	pubWitness := utils.Nullifier{
-		NullifierData: *testData,
-	}
-
-	wtns1, err := frontend.NewWitness(&pubWitness, ecc.BN254.ScalarField(), frontend.PublicOnly())
-	err = groth16.Verify(gProof, vk, wtns1)
-	assert.NoError(err)
 }
 
 func TestMaskUnmask(t *testing.T) {

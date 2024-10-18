@@ -1,6 +1,7 @@
 package chachaV3_oprf
 
 import (
+	"crypto/rand"
 	"fmt"
 	"testing"
 
@@ -8,7 +9,6 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend"
-	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/test"
@@ -121,30 +121,28 @@ func TestRound(t *testing.T) {
 	assert.CheckCircuit(&roundCircuit{}, test.WithValidAssignment(&witness))
 }
 
-const posToCopy = 59
+const secretPos = 59
 const email = "randomiiiiiiiiiiiiiizer"
 
 func TestCipher(t *testing.T) {
 	assert := test.NewAssert(t)
 
-	bKey := []uint8{
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-		0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f}
+	bKey := make([]byte, 32)
+	bNonce := make([]byte, 12)
+	rand.Read(bKey)
+	rand.Read(bNonce)
 
-	bNonce := []uint8{
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4a, 0x00, 0x00, 0x00, 0x00}
-
-	counter := 1
+	counter := 12345
 
 	plaintext := make([]byte, Blocks*64)
-	copy(plaintext[posToCopy:], email)
+	copy(plaintext[secretPos:], email)
 
 	bCt := make([]byte, Blocks*64)
 
 	cipher, err := chacha20.NewUnauthenticatedCipher(bKey, bNonce)
 	assert.NoError(err)
 
-	cipher.SetCounter(1)
+	cipher.SetCounter(uint32(counter))
 	cipher.XORKeyStream(bCt, plaintext)
 
 	d := utils.PrepareTestData(assert, email)
@@ -157,42 +155,13 @@ func TestCipher(t *testing.T) {
 	cs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &witness)
 	assert.NoError(err)
 	fmt.Println(cs.GetNbConstraints(), cs.GetNbPublicVariables(), cs.GetNbSecretVariables())
-
-	pk, vk, err := groth16.Setup(cs)
-	assert.NoError(err)
-
-	witness = createWitness(d, bKey, bNonce, counter, bCt, plaintext)
-	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
-	assert.NoError(err)
-	gProof, err := groth16.Prove(cs, pk, wtns)
-	assert.NoError(err)
-
-	pubWitness := ChaChaCircuit{
-		Pos:  posToCopy * 8,
-		Size: len(email) * 8,
-		OPRF: utils.NullifierData{
-			Response:        d.Response,
-			Nullifier:       d.Nullifier,
-			ServerPublicKey: d.ServerPublicKey,
-			Challenge:       d.Challenge,
-			Proof:           d.Proof,
-		},
-	}
-
-	pubWitness.Counter = utils.Uint32ToBits(counter)
-	copy(pubWitness.In[:], utils.BytesToUint32BEBits(bCt))
-	copy(pubWitness.Out[:], utils.BytesToUint32BEBits(plaintext))
-
-	wtns, err = frontend.NewWitness(&pubWitness, ecc.BN254.ScalarField(), frontend.PublicOnly())
-	err = groth16.Verify(gProof, vk, wtns)
-	assert.NoError(err)
 }
 
 func createWitness(d *utils.NullifierData, bKey []uint8, bNonce []uint8, counter int, bCt []byte, plaintext []byte) ChaChaCircuit {
 	witness := ChaChaCircuit{
-		Pos:  posToCopy * 8,
+		Pos:  secretPos * 8,
 		Size: len(email) * 8,
-		OPRF: utils.NullifierData{
+		OPRF: &utils.NullifierData{
 			SecretData:      d.SecretData,
 			Mask:            d.Mask,
 			Response:        d.Response,

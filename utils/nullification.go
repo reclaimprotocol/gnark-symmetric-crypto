@@ -21,14 +21,14 @@ type NullifierData struct {
 }
 
 type Nullifier struct {
-	NullifierData
+	*NullifierData
 }
 
 func (n *Nullifier) Define(api frontend.API) error {
 	return CheckNullifier(api, n.NullifierData)
 }
 
-func CheckNullifier(api frontend.API, n NullifierData) error {
+func CheckNullifier(api frontend.API, n *NullifierData) error {
 	curve, err := twistededwards.NewEdCurve(api, twistededwards2.BN254)
 	if err != nil {
 		return err
