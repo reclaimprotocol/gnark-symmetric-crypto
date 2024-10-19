@@ -24,8 +24,8 @@ type ChachaOPRFCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
 	Counter [BITS_PER_WORD]frontend.Variable
 	Nonce   [3][BITS_PER_WORD]frontend.Variable
-	In      [16 * Blocks][BITS_PER_WORD]frontend.Variable `gnark:",public"`
-	Out     [16 * Blocks][BITS_PER_WORD]frontend.Variable `gnark:",public"`
+	In      [16 * Blocks][BITS_PER_WORD]frontend.Variable // plaintext
+	Out     [16 * Blocks][BITS_PER_WORD]frontend.Variable `gnark:",public"` // ciphertext
 
 	// position & length of "secret data" to be hashed
 	Pos frontend.Variable `gnark:",public"`

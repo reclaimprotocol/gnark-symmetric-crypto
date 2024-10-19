@@ -121,10 +121,9 @@ func TestRound(t *testing.T) {
 	assert.CheckCircuit(&roundCircuit{}, test.WithValidAssignment(&witness))
 }
 
-const secretPos = 97
+// const secretPos = 97
 
-// const secretData = "very very long secret secret data so very very loong very data" // max 62 bytes
-const secretData = "very very long secret secret da"
+// const secretData = "very very long secret secret da"
 
 func TestCipher(t *testing.T) {
 	assert := test.NewAssert(t)
@@ -134,10 +133,12 @@ func TestCipher(t *testing.T) {
 	rand.Read(bKey)
 	rand.Read(bNonce)
 
+	secretStr := "very very long secret secret data so very very loong very data" // max 62 bytes
+	secretBytes := []byte(secretStr)
+	pos := 59
 	counter := 12345
-
 	plaintext := make([]byte, Blocks*64)
-	copy(plaintext[secretPos:], secretData)
+	copy(plaintext[pos:], secretBytes)
 
 	bCt := make([]byte, Blocks*64)
 
@@ -146,23 +147,21 @@ func TestCipher(t *testing.T) {
 
 	cipher.SetCounter(uint32(counter))
 	cipher.XORKeyStream(bCt, plaintext)
-
-	d := oprf.PrepareTestData(assert, secretData)
-
-	witness := createWitness(d, bKey, bNonce, counter, bCt, plaintext)
-
+	d := oprf.PrepareTestData(assert, secretStr)
+	witness := createWitness(d, bKey, bNonce, counter, bCt, plaintext, pos, len(secretBytes))
 	err = test.IsSolved(&witness, &witness, ecc.BN254.ScalarField())
 	assert.NoError(err)
 	assert.CheckCircuit(&witness, test.WithValidAssignment(&witness), test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254))
+
 	cs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &witness)
 	assert.NoError(err)
 	fmt.Println(cs.GetNbConstraints(), cs.GetNbPublicVariables(), cs.GetNbSecretVariables())
 }
 
-func createWitness(d *oprf.OPRFData, bKey []uint8, bNonce []uint8, counter int, bCt []byte, plaintext []byte) ChachaOPRFCircuit {
+func createWitness(d *oprf.OPRFData, bKey []uint8, bNonce []uint8, counter int, bCt []byte, plaintext []byte, pos, len int) ChachaOPRFCircuit {
 	witness := ChachaOPRFCircuit{
-		Pos: secretPos * 8,
-		Len: len(secretData) * 8,
+		Pos: pos * 8,
+		Len: len * 8,
 		OPRF: &OPRFData{
 			Mask:            d.Mask,
 			ServerResponse:  d.Response,
