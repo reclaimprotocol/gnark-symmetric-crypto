@@ -23,10 +23,10 @@ const maxSize = bitsPerElement * 2
 
 func extractData(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 	if len(inputs) != 2+512*Blocks {
-		return fmt.Errorf("expecting 3+254 inputs, got %d", len(inputs))
+		return fmt.Errorf("expecting %d inputs, got %d", 2+512*Blocks, len(inputs))
 	}
 	if len(outputs) != 2 {
-		return fmt.Errorf("expecting one output")
+		return fmt.Errorf("expecting 2 outputs")
 	}
 
 	inPos := inputs[0]
@@ -58,7 +58,7 @@ func extractData(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 
 	res1, res2 := outputs[0], outputs[1]
 	var res1Bits, res2Bits []*big.Int
-	if byteSize < 31 {
+	if byteSize <= bytesPerElement {
 		LEtoBE(bits, byteSize)
 		res1Bits = bits
 		res2 = big.NewInt(0)

@@ -121,8 +121,10 @@ func TestRound(t *testing.T) {
 	assert.CheckCircuit(&roundCircuit{}, test.WithValidAssignment(&witness))
 }
 
-const secretPos = 1
-const secretData = "very very long secret secret data so very very loong very data" // max 62 bytes
+const secretPos = 97
+
+// const secretData = "very very long secret secret data so very very loong very data" // max 62 bytes
+const secretData = "very very long secret secret da"
 
 func TestCipher(t *testing.T) {
 	assert := test.NewAssert(t)
