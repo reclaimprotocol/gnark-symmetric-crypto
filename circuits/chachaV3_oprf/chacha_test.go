@@ -161,8 +161,7 @@ func createWitness(d *utils.NullifierData, bKey []uint8, bNonce []uint8, counter
 	witness := ChaChaCircuit{
 		Pos:  secretPos * 8,
 		Size: len(email) * 8,
-		OPRF: &utils.NullifierData{
-			SecretData:      d.SecretData,
+		OPRF: &NullifierData{
 			Mask:            d.Mask,
 			Response:        d.Response,
 			Nullifier:       d.Nullifier,

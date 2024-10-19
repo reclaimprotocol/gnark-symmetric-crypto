@@ -4,10 +4,21 @@ import (
 	"gnark-symmetric-crypto/utils"
 
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/consensys/gnark/std/math/bits"
 )
 
 const Blocks = 2
+
+type NullifierData struct {
+	Mask      frontend.Variable
+	Response  twistededwards.Point `gnark:",public"`
+	Nullifier twistededwards.Point `gnark:",public"`
+	// Proof of DLEQ that Response was created with the same private key as server public key
+	ServerPublicKey twistededwards.Point `gnark:",public"`
+	Challenge       frontend.Variable    `gnark:",public"`
+	Proof           frontend.Variable    `gnark:",public"`
+}
 
 type ChaChaCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
@@ -18,7 +29,7 @@ type ChaChaCircuit struct {
 	Pos     frontend.Variable                             `gnark:",public"`
 	Size    frontend.Variable                             `gnark:",public"`
 
-	OPRF *utils.NullifierData
+	OPRF *NullifierData
 }
 
 func (c *ChaChaCircuit) Define(api frontend.API) error {
@@ -70,6 +81,7 @@ func (c *ChaChaCircuit) Define(api frontend.API) error {
 		}
 	}
 
+	// flattern input (plaintext)
 	for i := 0; i < len(c.Out); i++ {
 		word := i * 32
 		for j := 0; j < BITS_PER_WORD; j++ {
@@ -85,11 +97,20 @@ func (c *ChaChaCircuit) Define(api frontend.API) error {
 	api.AssertIsLessOrEqual(c.Size, 248)
 	api.AssertIsLessOrEqual(c.Pos, Blocks*512-248)
 
+	// extract "secret data" from pos & size
 	res, err := api.Compiler().NewHint(extractData, 1, inputs...)
 	if err != nil {
 		return err
 	}
 
-	api.AssertIsEqual(c.OPRF.SecretData, res[0])
-	return utils.CheckNullifier(api, c.OPRF)
+	oprf := &utils.NullifierData{
+		SecretData:      res[0],
+		Mask:            c.OPRF.Mask,
+		Response:        c.OPRF.Response,
+		Nullifier:       c.OPRF.Nullifier,
+		ServerPublicKey: c.OPRF.ServerPublicKey,
+		Challenge:       c.OPRF.Challenge,
+		Proof:           c.OPRF.Proof,
+	}
+	return utils.CheckNullifier(api, oprf)
 }
