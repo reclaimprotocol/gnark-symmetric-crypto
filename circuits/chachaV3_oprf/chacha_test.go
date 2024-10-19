@@ -3,9 +3,9 @@ package chachaV3_oprf
 import (
 	"crypto/rand"
 	"fmt"
-	"testing"
-
+	"gnark-symmetric-crypto/circuits/oprf"
 	"gnark-symmetric-crypto/utils"
+	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend"
@@ -121,8 +121,8 @@ func TestRound(t *testing.T) {
 	assert.CheckCircuit(&roundCircuit{}, test.WithValidAssignment(&witness))
 }
 
-const secretPos = 59
-const email = "randomiiiiiiiiiiiiiizer"
+const secretPos = 1
+const secretData = "very very long secret secret data so very very loong very data" // max 62 bytes
 
 func TestCipher(t *testing.T) {
 	assert := test.NewAssert(t)
@@ -135,7 +135,7 @@ func TestCipher(t *testing.T) {
 	counter := 12345
 
 	plaintext := make([]byte, Blocks*64)
-	copy(plaintext[secretPos:], email)
+	copy(plaintext[secretPos:], secretData)
 
 	bCt := make([]byte, Blocks*64)
 
@@ -145,7 +145,7 @@ func TestCipher(t *testing.T) {
 	cipher.SetCounter(uint32(counter))
 	cipher.XORKeyStream(bCt, plaintext)
 
-	d := utils.PrepareTestData(assert, email)
+	d := oprf.PrepareTestData(assert, secretData)
 
 	witness := createWitness(d, bKey, bNonce, counter, bCt, plaintext)
 
@@ -157,24 +157,24 @@ func TestCipher(t *testing.T) {
 	fmt.Println(cs.GetNbConstraints(), cs.GetNbPublicVariables(), cs.GetNbSecretVariables())
 }
 
-func createWitness(d *utils.NullifierData, bKey []uint8, bNonce []uint8, counter int, bCt []byte, plaintext []byte) ChaChaCircuit {
-	witness := ChaChaCircuit{
-		Pos:  secretPos * 8,
-		Size: len(email) * 8,
-		OPRF: &NullifierData{
+func createWitness(d *oprf.OPRFData, bKey []uint8, bNonce []uint8, counter int, bCt []byte, plaintext []byte) ChachaOPRFCircuit {
+	witness := ChachaOPRFCircuit{
+		Pos: secretPos * 8,
+		Len: len(secretData) * 8,
+		OPRF: &OPRFData{
 			Mask:            d.Mask,
-			Response:        d.Response,
-			Nullifier:       d.Nullifier,
+			ServerResponse:  d.Response,
+			Output:          d.Output,
 			ServerPublicKey: d.ServerPublicKey,
-			Challenge:       d.Challenge,
-			Proof:           d.Proof,
+			C:               d.C,
+			S:               d.S,
 		},
 	}
 
 	copy(witness.Key[:], utils.BytesToUint32LEBits(bKey))
 	copy(witness.Nonce[:], utils.BytesToUint32LEBits(bNonce))
 	witness.Counter = utils.Uint32ToBits(counter)
-	copy(witness.In[:], utils.BytesToUint32BEBits(bCt))
-	copy(witness.Out[:], utils.BytesToUint32BEBits(plaintext))
+	copy(witness.In[:], utils.BytesToUint32BEBits(plaintext))
+	copy(witness.Out[:], utils.BytesToUint32BEBits(bCt))
 	return witness
 }

@@ -1,7 +1,7 @@
 package chachaV3_oprf
 
 import (
-	"gnark-symmetric-crypto/utils"
+	"gnark-symmetric-crypto/circuits/oprf"
 
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
@@ -10,30 +10,32 @@ import (
 
 const Blocks = 2
 
-type NullifierData struct {
-	Mask      frontend.Variable
-	Response  twistededwards.Point `gnark:",public"`
-	Nullifier twistededwards.Point `gnark:",public"`
-	// Proof of DLEQ that Response was created with the same private key as server public key
+type OPRFData struct {
+	Mask            frontend.Variable
+	ServerResponse  twistededwards.Point `gnark:",public"`
 	ServerPublicKey twistededwards.Point `gnark:",public"`
-	Challenge       frontend.Variable    `gnark:",public"`
-	Proof           frontend.Variable    `gnark:",public"`
+	Output          twistededwards.Point `gnark:",public"`
+	// Proof values of DLEQ that ServerResponse was created with the same private key as server public key
+	C frontend.Variable `gnark:",public"`
+	S frontend.Variable `gnark:",public"`
 }
 
-type ChaChaCircuit struct {
+type ChachaOPRFCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
 	Counter [BITS_PER_WORD]frontend.Variable
 	Nonce   [3][BITS_PER_WORD]frontend.Variable
 	In      [16 * Blocks][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 	Out     [16 * Blocks][BITS_PER_WORD]frontend.Variable `gnark:",public"`
-	Pos     frontend.Variable                             `gnark:",public"`
-	Size    frontend.Variable                             `gnark:",public"`
 
-	OPRF *NullifierData
+	// position & length of "secret data" to be hashed
+	Pos frontend.Variable `gnark:",public"`
+	Len frontend.Variable `gnark:",public"`
+
+	OPRF *OPRFData
 }
 
-func (c *ChaChaCircuit) Define(api frontend.API) error {
-	pureOut := make([]frontend.Variable, 16*Blocks*BITS_PER_WORD)
+func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
+	inBits := make([]frontend.Variable, 16*Blocks*BITS_PER_WORD)
 	var state [16][BITS_PER_WORD]frontend.Variable
 	counter := c.Counter
 
@@ -82,35 +84,35 @@ func (c *ChaChaCircuit) Define(api frontend.API) error {
 	}
 
 	// flattern input (plaintext)
-	for i := 0; i < len(c.Out); i++ {
+	for i := 0; i < len(c.In); i++ {
 		word := i * 32
 		for j := 0; j < BITS_PER_WORD; j++ {
-			nByte := 3 - j/8
-			pureOut[word+j] = c.Out[i][nByte*8+j%8]
+			nByte := 3 - j/8 // switch endianness back
+			inBits[word+j] = c.In[i][nByte*8+j%8]
 		}
 	}
 
-	inputs := make([]frontend.Variable, 2+len(pureOut))
-	copy(inputs[2:], pureOut)
-	inputs[0] = c.Pos
-	inputs[1] = c.Size
-	api.AssertIsLessOrEqual(c.Size, 248)
-	api.AssertIsLessOrEqual(c.Pos, Blocks*512-248)
+	hintInputs := make([]frontend.Variable, 2+len(inBits))
+	copy(hintInputs[2:], inBits)
+	hintInputs[0] = c.Pos
+	hintInputs[1] = c.Len
+	api.AssertIsLessOrEqual(api.Add(c.Pos, c.Len), 512*Blocks)
 
 	// extract "secret data" from pos & size
-	res, err := api.Compiler().NewHint(extractData, 1, inputs...)
+	res, err := api.Compiler().NewHint(extractData, 2, hintInputs...)
 	if err != nil {
 		return err
 	}
 
-	oprf := &utils.NullifierData{
-		SecretData:      res[0],
+	// check that OPRF output was created from secret data by a server with a specific public key
+	oprfData := &oprf.OPRFData{
+		SecretData:      [2]frontend.Variable{res[0], res[1]},
 		Mask:            c.OPRF.Mask,
-		Response:        c.OPRF.Response,
-		Nullifier:       c.OPRF.Nullifier,
+		Response:        c.OPRF.ServerResponse,
+		Output:          c.OPRF.Output,
 		ServerPublicKey: c.OPRF.ServerPublicKey,
-		Challenge:       c.OPRF.Challenge,
-		Proof:           c.OPRF.Proof,
+		C:               c.OPRF.C,
+		S:               c.OPRF.S,
 	}
-	return utils.CheckNullifier(api, oprf)
+	return oprf.VerifyOPRF(api, oprfData)
 }

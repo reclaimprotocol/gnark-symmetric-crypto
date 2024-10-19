@@ -1,4 +1,4 @@
-package utils
+package oprf
 
 import (
 	"crypto/rand"
@@ -6,6 +6,7 @@ import (
 
 	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	"github.com/consensys/gnark-crypto/hash"
+	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/consensys/gnark/test"
 )
@@ -21,15 +22,28 @@ type Proof struct {
 type TestData struct {
 	Response   twistededwards.Point
 	SecretData *big.Int
-	Nullifier  twistededwards.Point
+	Output     twistededwards.Point
 	Mask       *big.Int
 	InvMask    *big.Int
 	Proof      *Proof
 }
 
-func PrepareTestData(assert *test.Assert, email string) *NullifierData {
+func PrepareTestData(assert *test.Assert, secretData string) *OPRFData {
 	curve := tbn254.GetEdwardsCurve()
-	secretData := (&big.Int{}).SetBytes([]byte(email))
+	secretBytes := []byte(secretData)
+	if len(secretBytes) > 31*2 {
+		panic("secret data too big")
+	}
+
+	secretElements := make([]*big.Int, 2)
+
+	if len(secretBytes) > 31 {
+		secretElements[0] = new(big.Int).SetBytes(secretBytes[:31])
+		secretElements[1] = new(big.Int).SetBytes(secretBytes[31:])
+	} else {
+		secretElements[0] = new(big.Int).SetBytes(secretBytes)
+		secretElements[1] = big.NewInt(0)
+	}
 
 	// random mask
 	mask, _ := rand.Int(rand.Reader, BN254ScalarField)
@@ -39,7 +53,7 @@ func PrepareTestData(assert *test.Assert, email string) *NullifierData {
 	serverPublic := &tbn254.PointAffine{}
 	serverPublic.ScalarMultiplication(&curve.Base, sk) // G*sk
 
-	H := hashToCurve(secretData.Bytes()) // H
+	H := hashToCurve(secretElements[0].Bytes(), secretElements[1].Bytes()) // H
 	assert.True(H.IsOnCurve())
 
 	// mask
@@ -50,23 +64,23 @@ func PrepareTestData(assert *test.Assert, email string) *NullifierData {
 	resp := &tbn254.PointAffine{}
 	resp.ScalarMultiplication(masked, sk) // H*Proof*sk
 
-	// nullifier calc
+	// output calc
 	invR := new(big.Int)
 	invR.ModInverse(mask, BN254ScalarField) // Proof^-1
 
-	nullifier := &tbn254.PointAffine{}
-	nullifier.ScalarMultiplication(resp, invR) // H *Proof * sk * Proof^-1 = H * sk
+	output := &tbn254.PointAffine{}
+	output.ScalarMultiplication(resp, invR) // H *Proof * sk * Proof^-1 = H * sk
 
 	c, r := ProveDLEQ(assert, sk, serverPublic, resp, masked)
 
-	return &NullifierData{
+	return &OPRFData{
 		Response:        OutPointToInPoint(resp),
-		SecretData:      secretData,
-		Nullifier:       OutPointToInPoint(nullifier),
+		SecretData:      [2]frontend.Variable{secretElements[0], secretElements[1]},
+		Output:          OutPointToInPoint(output),
 		Mask:            mask,
 		ServerPublicKey: OutPointToInPoint(serverPublic),
-		Challenge:       c,
-		Proof:           r,
+		C:               c,
+		S:               r,
 	}
 }
 
@@ -130,7 +144,11 @@ func OutPointToInPoint(point *tbn254.PointAffine) twistededwards.Point {
 func hashBN(data ...[]byte) []byte {
 	hasher := hash.MIMC_BN254.New()
 	for _, d := range data {
-		_, err := hasher.Write(d)
+		t := d
+		if len(d) == 0 {
+			t = []byte{0} // otherwise hasher won't pick zero values
+		}
+		_, err := hasher.Write(t)
 		if err != nil {
 			panic(err)
 		}
@@ -155,8 +173,8 @@ func hashPoints(data ...*tbn254.PointAffine) []byte {
 	return hasher.Sum(nil)
 }
 
-func hashToCurve(data []byte) *tbn254.PointAffine {
-	hashedData := hashBN(data)
+func hashToCurve(data ...[]byte) *tbn254.PointAffine {
+	hashedData := hashBN(data...)
 	scalar := new(big.Int).SetBytes(hashedData)
 	params := tbn254.GetEdwardsCurve()
 	multiplicationResult := &tbn254.PointAffine{}

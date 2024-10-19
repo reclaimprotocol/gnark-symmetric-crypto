@@ -1,4 +1,4 @@
-package utils
+package oprf
 
 import (
 	twistededwards2 "github.com/consensys/gnark-crypto/ecc/twistededwards"
@@ -9,43 +9,41 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 )
 
-type NullifierData struct {
-	SecretData frontend.Variable
+type OPRFData struct {
+	SecretData [2]frontend.Variable
 	Mask       frontend.Variable
 	Response   twistededwards.Point `gnark:",public"`
-	Nullifier  twistededwards.Point `gnark:",public"`
+	Output     twistededwards.Point `gnark:",public"`
 	// Proof of DLEQ that Response was created with the same private key as server public key
 	ServerPublicKey twistededwards.Point `gnark:",public"`
-	Challenge       frontend.Variable    `gnark:",public"`
-	Proof           frontend.Variable    `gnark:",public"`
+	C               frontend.Variable    `gnark:",public"`
+	S               frontend.Variable    `gnark:",public"`
 }
 
-type Nullifier struct {
-	*NullifierData
+type OPRF struct {
+	*OPRFData
 }
 
-func (n *Nullifier) Define(api frontend.API) error {
-	return CheckNullifier(api, n.NullifierData)
+func (n *OPRF) Define(api frontend.API) error {
+	return VerifyOPRF(api, n.OPRFData)
 }
 
-func CheckNullifier(api frontend.API, n *NullifierData) error {
+func VerifyOPRF(api frontend.API, n *OPRFData) error {
 	curve, err := twistededwards.NewEdCurve(api, twistededwards2.BN254)
 	if err != nil {
 		return err
 	}
-	field, err := emulated.NewField[BabyParams](api)
+	field, err := emulated.NewField[BabyJubParams](api)
 	if err != nil {
 		return err
 	}
-	helper := NewBabyFieldHelper(api)
+	helper := NewBabyJubFieldHelper(api)
 
 	curve.AssertIsOnCurve(n.Response)
-	curve.AssertIsOnCurve(n.Nullifier)
+	curve.AssertIsOnCurve(n.Output)
 	curve.AssertIsOnCurve(n.ServerPublicKey)
 
-	/*babyModulus := new(BabyParams).Modulus()
-
-
+	/*babyModulus := new(BabyJubParams).Modulus()
 	api.AssertIsLessOrEqual(n.Mask, babyModulus)
 	api.AssertIsLessOrEqual(n.InvMask, babyModulus)
 	api.AssertIsLessOrEqual(n.SecretData, babyModulus)*/
@@ -61,7 +59,7 @@ func CheckNullifier(api frontend.API, n *NullifierData) error {
 	masked := curve.ScalarMul(*dataPoint, n.Mask)
 	curve.AssertIsOnCurve(masked)
 
-	err = checkDLEQ(api, curve, masked, n.Response, n.ServerPublicKey, n.Challenge, n.Proof)
+	err = checkDLEQ(api, curve, masked, n.Response, n.ServerPublicKey, n.C, n.S)
 	if err != nil {
 		return err
 	}
@@ -69,8 +67,8 @@ func CheckNullifier(api frontend.API, n *NullifierData) error {
 	invMask := helper.packScalarToVar(field.Inverse(mask))
 	unMasked := curve.ScalarMul(n.Response, invMask)
 
-	api.AssertIsEqual(n.Nullifier.X, unMasked.X)
-	api.AssertIsEqual(n.Nullifier.Y, unMasked.Y)
+	api.AssertIsEqual(n.Output.X, unMasked.X)
+	api.AssertIsEqual(n.Output.Y, unMasked.Y)
 
 	return nil
 }
@@ -115,12 +113,13 @@ func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, S
 	return nil
 }
 
-func hashToPoint(api frontend.API, curve twistededwards.Curve, data frontend.Variable) (*twistededwards.Point, error) {
+func hashToPoint(api frontend.API, curve twistededwards.Curve, data [2]frontend.Variable) (*twistededwards.Point, error) {
 	hField, err := mimc.NewMiMC(api)
 	if err != nil {
 		return nil, err
 	}
-	hField.Write(data)
+	hField.Write(data[0])
+	hField.Write(data[1])
 	hashedSecretData := hField.Sum()
 	hField.Reset()
 

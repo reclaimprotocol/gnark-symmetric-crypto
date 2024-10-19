@@ -1,9 +1,8 @@
-package utils_test
+package oprf
 
 import (
 	"crypto/rand"
 	"fmt"
-	"gnark-symmetric-crypto/utils"
 	"math/big"
 	"testing"
 
@@ -11,16 +10,14 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	"github.com/consensys/gnark/test"
-	"github.com/rs/zerolog"
 )
 
-func TestProcessNullification(t *testing.T) {
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+func TestOPRF(t *testing.T) {
 	assert := test.NewAssert(t)
-	testData := utils.PrepareTestData(assert, "randomiiiiiiiiiiiiiizer")
+	testData := PrepareTestData(assert, "randomiiiiiiiiiiiiiizerrandomiiiiiiiiiiiiiizerrandomiiiiiiiiir")
 
-	circuit := utils.Nullifier{
-		NullifierData: testData,
+	circuit := OPRF{
+		OPRFData: testData,
 	}
 
 	assert.CheckCircuit(&circuit, test.WithCurves(ecc.BN254), test.WithValidAssignment(&circuit))
@@ -34,14 +31,14 @@ func TestMaskUnmask(t *testing.T) {
 	data.ScalarMultiplication(&base, big.NewInt(12345)) // just dummy data
 
 	// random scalar
-	r, err := rand.Int(rand.Reader, utils.BN254ScalarField)
+	r, err := rand.Int(rand.Reader, BN254ScalarField)
 	assert.NoError(err)
 
 	blinded := &tbn254.PointAffine{}
 	blinded.ScalarMultiplication(data, r)
 
 	invR := &big.Int{}
-	invR.ModInverse(r, utils.BN254ScalarField)
+	invR.ModInverse(r, BN254ScalarField)
 	deblinded := &tbn254.PointAffine{}
 	deblinded.ScalarMultiplication(blinded, invR)
 	fmt.Println(r, invR)

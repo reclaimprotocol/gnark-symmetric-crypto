@@ -17,41 +17,68 @@ func GetHints() []solver.Hint {
 	}
 }
 
-const maxSize = 254
+const bytesPerElement = 31
+const bitsPerElement = bytesPerElement * 8
+const maxSize = bitsPerElement * 2
 
 func extractData(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 	if len(inputs) != 2+512*Blocks {
 		return fmt.Errorf("expecting 3+254 inputs, got %d", len(inputs))
 	}
-	if len(outputs) != 1 {
+	if len(outputs) != 2 {
 		return fmt.Errorf("expecting one output")
 	}
 
-	pos := inputs[0]
-	size := inputs[1]
+	inPos := inputs[0]
+	inSize := inputs[1]
 	bits := inputs[2:]
-	if !pos.IsUint64() {
+	if !inPos.IsUint64() {
 		return fmt.Errorf("pos must be int")
 	}
-	if !size.IsUint64() {
+	if !inSize.IsUint64() {
 		return fmt.Errorf("size must be int")
 	}
 
-	if size.Uint64() > maxSize {
-		return fmt.Errorf("size must be < %d", maxSize)
+	pos := inPos.Uint64()
+	size := inSize.Uint64()
+	if size > maxSize {
+		return fmt.Errorf("size must be <= %d", maxSize)
 	}
-	if pos.Uint64()+size.Uint64() > 512*Blocks {
+	if pos+size > 512*Blocks {
 		return fmt.Errorf("out of bounds")
 	}
 
-	if size.Uint64()%8 != 0 {
+	if size%8 != 0 {
 		return fmt.Errorf("size not a multiple of 8")
 	}
 
-	bits = bits[pos.Uint64() : pos.Uint64()+size.Uint64()]
+	bits = bits[pos : pos+size]
 	bitsSize := len(bits)
 	byteSize := bitsSize / 8
-	// switch endianness
+
+	res1, res2 := outputs[0], outputs[1]
+	var res1Bits, res2Bits []*big.Int
+	if byteSize < 31 {
+		LEtoBE(bits, byteSize)
+		res1Bits = bits
+		res2 = big.NewInt(0)
+	} else {
+		res1Bits = bits[:bitsPerElement]
+		res2Bits = bits[bitsPerElement:]
+		LEtoBE(res1Bits, bytesPerElement)
+		LEtoBE(res2Bits, len(res2Bits)/8)
+	}
+
+	for i := 0; i < len(res1Bits); i++ {
+		res1.SetBit(res1, i, uint(res1Bits[i].Uint64()))
+	}
+	for i := 0; i < len(res2Bits); i++ {
+		res2.SetBit(res2, i, uint(res2Bits[i].Uint64()))
+	}
+	return nil
+}
+
+func LEtoBE(bits []*big.Int, byteSize int) {
 	for i := 0; i < byteSize/2; i++ {
 		b1 := 8 * i
 		b2 := (byteSize - i - 1) * 8
@@ -59,15 +86,4 @@ func extractData(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 			bits[b1+j], bits[b2+j] = bits[b2+j], bits[b1+j]
 		}
 	}
-
-	res := outputs[0]
-
-	for i := 0; i < bitsSize; i++ {
-		if !bits[i].IsUint64() || bits[i].Uint64() > 1 {
-			return fmt.Errorf("invalid bit value, must be 0 or 1 got %d", bits[i].Uint64())
-		}
-
-		res.SetBit(res, i, uint(bits[i].Uint64()))
-	}
-	return nil
 }

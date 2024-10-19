@@ -1,4 +1,4 @@
-package utils
+package oprf
 
 import (
 	"math/big"
@@ -8,37 +8,37 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 )
 
-type BabyParams struct {
+type BabyJubParams struct {
 }
 
-func (b BabyParams) NbLimbs() uint     { return 4 }
-func (b BabyParams) BitsPerLimb() uint { return 64 }
-func (b BabyParams) IsPrime() bool     { return true }
-func (b BabyParams) Modulus() *big.Int {
+func (b BabyJubParams) NbLimbs() uint     { return 4 }
+func (b BabyJubParams) BitsPerLimb() uint { return 64 }
+func (b BabyJubParams) IsPrime() bool     { return true }
+func (b BabyJubParams) Modulus() *big.Int {
 	order := tbn254.GetEdwardsCurve().Order
 	return &order
 }
 
-type ScalarField = BabyParams
-type Scalar = emulated.Element[BabyParams]
+type ScalarField = BabyJubParams
+type Scalar = emulated.Element[BabyJubParams]
 
-type BabyField struct {
+type BabyJubField struct {
 	api frontend.API
 	fr  *emulated.Field[ScalarField]
 }
 
-func NewBabyFieldHelper(api frontend.API) *BabyField {
+func NewBabyJubFieldHelper(api frontend.API) *BabyJubField {
 	field, err := emulated.NewField[ScalarField](api)
 	if err != nil {
 		panic(err)
 	}
-	return &BabyField{
+	return &BabyJubField{
 		api: api,
 		fr:  field,
 	}
 }
 
-func (b BabyField) packScalarToVar(s *Scalar) frontend.Variable {
+func (b BabyJubField) packScalarToVar(s *Scalar) frontend.Variable {
 	var fr ScalarField
 	reduced := b.fr.Reduce(s)
 	var res frontend.Variable = 0
