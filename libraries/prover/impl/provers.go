@@ -14,6 +14,7 @@ import (
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std"
+	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"golang.org/x/crypto/chacha20"
 )
 
@@ -24,6 +25,7 @@ func init() {
 const BITS_PER_WORD = 32
 const BLOCKS = 1
 const AES_BLOCKS = 4
+const CHACHA_OPRF_BLOCKS = 2
 
 type ChaChaCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
@@ -49,12 +51,48 @@ func (circuit *AESWrapper) Define(_ frontend.API) error {
 	return nil
 }
 
+type OPRFData struct {
+	Mask            frontend.Variable
+	ServerResponse  twistededwards.Point `gnark:",public"`
+	ServerPublicKey twistededwards.Point `gnark:",public"`
+	Output          twistededwards.Point `gnark:",public"` // after this point is hashed it will be the "nullifier"
+	// Proof values of DLEQ that ServerResponse was created with the same private key as server public key
+	C frontend.Variable `gnark:",public"`
+	S frontend.Variable `gnark:",public"`
+}
+
+type ChachaOPRFCircuit struct {
+	Key     [8][BITS_PER_WORD]frontend.Variable
+	Counter [BITS_PER_WORD]frontend.Variable
+	Nonce   [3][BITS_PER_WORD]frontend.Variable
+	In      [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"` // ciphertext
+	Out     [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"` // plaintext
+
+	// position & length of "secret data" to be hashed
+	Pos  frontend.Variable `gnark:",public"`
+	Len  frontend.Variable `gnark:",public"`
+	OPRF *OPRFData
+}
+
+type OPRFParams struct {
+	Pos             uint32  `json:"pos"`
+	Len             uint32  `json:"len"`
+	Mask            []uint8 `json:"mask"`
+	ServerResponse  []uint8 `json:"serverResponse"`
+	ServerPublicKey []uint8 `json:"serverPublicKey"`
+	Output          []uint8 `json:"output"`
+	C               []uint8 `json:"c"`
+	S               []uint8 `json:"s"`
+}
+
 type InputParams struct {
 	Cipher  string  `json:"cipher"`
 	Key     []uint8 `json:"key"`
 	Nonce   []uint8 `json:"nonce"`
 	Counter uint32  `json:"counter"`
 	Input   []uint8 `json:"input"` // usually it's redacted ciphertext
+	// for OPRF
+	OPRF *OPRFParams `json:"oprf"`
 }
 
 type Prover interface {
@@ -75,7 +113,9 @@ func (cp *ChaChaProver) SetParams(r1cs constraint.ConstraintSystem, pk groth16.P
 	cp.r1cs = r1cs
 	cp.pk = pk
 }
-func (cp *ChaChaProver) proveChaCha(key []uint8, nonce []uint8, counter uint32, input []uint8) (proof []byte, output []uint8) {
+func (cp *ChaChaProver) Prove(params *InputParams) (proof []byte, output []uint8) {
+
+	key, nonce, counter, input := params.Key, params.Nonce, params.Counter, params.Input
 
 	if len(key) != 32 {
 		log.Panicf("key length must be 32: %d", len(key))
@@ -112,33 +152,11 @@ func (cp *ChaChaProver) proveChaCha(key []uint8, nonce []uint8, counter uint32, 
 
 	witness := &ChaChaCircuit{}
 
-	for i := 0; i < len(witness.Key); i++ {
-		for j := 0; j < len(witness.Key[i]); j++ {
-			witness.Key[i][j] = bKey[i][j]
-		}
-	}
-
-	for i := 0; i < len(witness.Nonce); i++ {
-		for j := 0; j < len(witness.Nonce[i]); j++ {
-			witness.Nonce[i][j] = bNonce[i][j]
-		}
-	}
-
-	for i := 0; i < len(witness.Counter); i++ {
-		witness.Counter[i] = bCounter[i]
-	}
-
-	for i := 0; i < len(witness.In); i++ {
-		for j := 0; j < len(witness.In[i]); j++ {
-			witness.In[i][j] = bInput[i][j]
-		}
-	}
-
-	for i := 0; i < len(witness.Out); i++ {
-		for j := 0; j < len(witness.Out[i]); j++ {
-			witness.Out[i][j] = bOutput[i][j]
-		}
-	}
+	copy(witness.Key[:], bKey)
+	copy(witness.Nonce[:], bNonce)
+	witness.Counter = bCounter
+	copy(witness.In[:], bInput)
+	copy(witness.Out[:], bOutput)
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField())
 	if err != nil {
@@ -155,10 +173,6 @@ func (cp *ChaChaProver) proveChaCha(key []uint8, nonce []uint8, counter uint32, 
 	}
 	return buf.Bytes(), output
 }
-func (cp *ChaChaProver) Prove(params *InputParams) (proof []byte, ciphertext []uint8) {
-
-	return cp.proveChaCha(params.Key, params.Nonce, params.Counter, params.Input)
-}
 
 type AESProver struct {
 	baseProver
@@ -168,7 +182,9 @@ func (ap *AESProver) SetParams(r1cs constraint.ConstraintSystem, pk groth16.Prov
 	ap.r1cs = r1cs
 	ap.pk = pk
 }
-func (ap *AESProver) proveAES(key []uint8, nonce []uint8, counter uint32, input []uint8) (proof []byte, output []uint8) {
+func (ap *AESProver) Prove(params *InputParams) (proof []byte, output []uint8) {
+
+	key, nonce, counter, input := params.Key, params.Nonce, params.Counter, params.Input
 
 	if len(key) != 32 && len(key) != 16 {
 		log.Panicf("key length must be 16 or 32: %d", len(key))
@@ -195,6 +211,7 @@ func (ap *AESProver) proveAES(key []uint8, nonce []uint8, counter uint32, input 
 	}
 
 	circuit.Counter = counter
+
 	for i := 0; i < len(key); i++ {
 		circuit.Key[i] = key[i]
 	}
@@ -224,6 +241,72 @@ func (ap *AESProver) proveAES(key []uint8, nonce []uint8, counter uint32, input 
 
 	return buf.Bytes(), output
 }
-func (ap *AESProver) Prove(params *InputParams) (proof []byte, output []uint8) {
-	return ap.proveAES(params.Key, params.Nonce, params.Counter, params.Input)
+
+type ChaChaOPRFProver struct {
+	baseProver
+}
+
+func (cp *ChaChaOPRFProver) SetParams(r1cs constraint.ConstraintSystem, pk groth16.ProvingKey) {
+	cp.r1cs = r1cs
+	cp.pk = pk
+}
+func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []uint8) {
+
+	key, nonce, counter, input := params.Key, params.Nonce, params.Counter, params.Input
+
+	if len(key) != 32 {
+		log.Panicf("key length must be 32: %d", len(key))
+	}
+	if len(nonce) != 12 {
+		log.Panicf("nonce length must be 12: %d", len(nonce))
+	}
+	if len(input) != 64 {
+		log.Panicf("input length must be 64: %d", len(input))
+	}
+
+	// calculate ciphertext ourselves
+
+	output = make([]byte, len(input))
+
+	ctr, err := chacha20.NewUnauthenticatedCipher(key, nonce)
+	if err != nil {
+		panic(err)
+	}
+
+	ctr.SetCounter(counter)
+	ctr.XORKeyStream(output, input)
+
+	// convert input values to bits preserving byte order
+
+	// plaintext & ciphertext are in BE order
+	bInput := utils.BytesToUint32BEBits(input)
+	bOutput := utils.BytesToUint32BEBits(output)
+
+	// everything else in LE order
+	bKey := utils.BytesToUint32LEBits(key)
+	bNonce := utils.BytesToUint32LEBits(nonce)
+	bCounter := utils.Uint32ToBits(counter)
+
+	witness := &ChaChaCircuit{}
+
+	copy(witness.Key[:], bKey)
+	copy(witness.Nonce[:], bNonce)
+	witness.Counter = bCounter
+	copy(witness.In[:], bInput)
+	copy(witness.Out[:], bOutput)
+
+	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField())
+	if err != nil {
+		panic(err)
+	}
+	gProof, err := groth16.Prove(cp.r1cs, cp.pk, wtns)
+	if err != nil {
+		panic(err)
+	}
+	buf := &bytes.Buffer{}
+	_, err = gProof.WriteTo(buf)
+	if err != nil {
+		panic(err)
+	}
+	return buf.Bytes(), output
 }

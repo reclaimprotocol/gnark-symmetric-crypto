@@ -56,12 +56,8 @@ func (cv *ChachaVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 	output := bSignals[:len(bSignals)/2]
 	input := bSignals[len(bSignals)/2:]
 
-	for i := 0; i < len(witness.In); i++ {
-		for j := 0; j < len(witness.In[i]); j++ {
-			witness.In[i][j] = input[i][j]
-			witness.Out[i][j] = output[i][j]
-		}
-	}
+	copy(witness.In[:], input)
+	copy(witness.Out[:], output)
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	if err != nil {
