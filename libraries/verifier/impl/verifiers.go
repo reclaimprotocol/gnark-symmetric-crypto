@@ -26,8 +26,8 @@ func (c *ChaChaCircuit) Define(_ frontend.API) error {
 const AES_BLOCKS = 4
 
 type AESWrapper struct {
-	Plaintext  [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
-	Ciphertext [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
+	In  [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Out [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
 }
 
 func (circuit *AESWrapper) Define(_ frontend.API) error {
@@ -53,13 +53,13 @@ func (cv *ChachaVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 
 	bSignals := utils.BytesToUint32BEBits(publicSignals)
 
-	ciphertext := bSignals[:len(bSignals)/2]
-	plaintext := bSignals[len(bSignals)/2:]
+	output := bSignals[:len(bSignals)/2]
+	input := bSignals[len(bSignals)/2:]
 
 	for i := 0; i < len(witness.In); i++ {
 		for j := 0; j < len(witness.In[i]); j++ {
-			witness.In[i][j] = plaintext[i][j]
-			witness.Out[i][j] = ciphertext[i][j]
+			witness.In[i][j] = input[i][j]
+			witness.Out[i][j] = output[i][j]
 		}
 	}
 
@@ -92,13 +92,13 @@ func (av *AESVerifier) Verify(bProof []byte, publicSignals []uint8) bool {
 		return false
 	}
 
-	ciphertext := publicSignals[:len(publicSignals)/2]
-	plaintext := publicSignals[len(publicSignals)/2:]
+	output := publicSignals[:len(publicSignals)/2]
+	input := publicSignals[len(publicSignals)/2:]
 
 	witness := &AESWrapper{}
-	for i := 0; i < len(plaintext); i++ {
-		witness.Plaintext[i] = plaintext[i]
-		witness.Ciphertext[i] = ciphertext[i]
+	for i := 0; i < len(input); i++ {
+		witness.In[i] = input[i]
+		witness.Out[i] = output[i]
 	}
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
