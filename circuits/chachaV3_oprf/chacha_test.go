@@ -121,10 +121,6 @@ func TestRound(t *testing.T) {
 	assert.CheckCircuit(&roundCircuit{}, test.WithValidAssignment(&witness))
 }
 
-// const secretPos = 97
-
-// const secretData = "very very long secret secret da"
-
 func TestCipher(t *testing.T) {
 	assert := test.NewAssert(t)
 
@@ -147,8 +143,12 @@ func TestCipher(t *testing.T) {
 
 	cipher.SetCounter(uint32(counter))
 	cipher.XORKeyStream(bCt, plaintext)
-	d := oprf.PrepareTestData(assert, secretStr)
+
+	d, err := oprf.PrepareTestData(secretStr)
+	assert.NoError(err)
+
 	witness := createWitness(d, bKey, bNonce, counter, bCt, plaintext, pos, len(secretBytes))
+
 	err = test.IsSolved(&witness, &witness, ecc.BN254.ScalarField())
 	assert.NoError(err)
 	assert.CheckCircuit(&witness, test.WithValidAssignment(&witness), test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254))
