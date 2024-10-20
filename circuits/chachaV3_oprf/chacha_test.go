@@ -144,7 +144,7 @@ func TestCipher(t *testing.T) {
 	cipher.SetCounter(uint32(counter))
 	cipher.XORKeyStream(bCt, plaintext)
 
-	d, err := oprf.PrepareTestData(secretStr)
+	d, err := oprf.PrepareTestData(secretStr, "reclaim")
 	assert.NoError(err)
 
 	witness := createWitness(d, bKey, bNonce, counter, bCt, plaintext, pos, len(secretBytes))
@@ -164,6 +164,7 @@ func createWitness(d *oprf.OPRFData, bKey []uint8, bNonce []uint8, counter int, 
 		Len: len * 8,
 		OPRF: &OPRFData{
 			Mask:            d.Mask,
+			DomainSeparator: d.DomainSeparator,
 			ServerResponse:  d.Response,
 			Output:          d.Output,
 			ServerPublicKey: d.ServerPublicKey,

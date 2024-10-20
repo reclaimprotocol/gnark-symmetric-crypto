@@ -10,10 +10,11 @@ import (
 )
 
 type OPRFData struct {
-	SecretData [2]frontend.Variable
-	Mask       frontend.Variable
-	Response   twistededwards.Point `gnark:",public"`
-	Output     twistededwards.Point `gnark:",public"`
+	SecretData      [2]frontend.Variable
+	DomainSeparator frontend.Variable
+	Mask            frontend.Variable
+	Response        twistededwards.Point `gnark:",public"`
+	Output          twistededwards.Point `gnark:",public"`
 	// Proof of DLEQ that Response was created with the same private key as server public key
 	ServerPublicKey twistededwards.Point `gnark:",public"`
 	C               frontend.Variable    `gnark:",public"`
@@ -51,7 +52,7 @@ func VerifyOPRF(api frontend.API, n *OPRFData) error {
 	maskBits := bits.ToBinary(api, n.Mask, bits.WithNbDigits(api.Compiler().Field().BitLen()))
 	mask := field.FromBits(maskBits...)
 
-	dataPoint, err := hashToPoint(api, curve, n.SecretData)
+	dataPoint, err := hashToPoint(api, curve, n.SecretData, n.DomainSeparator)
 	if err != nil {
 		return err
 	}
@@ -116,13 +117,14 @@ func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, S
 	return nil
 }
 
-func hashToPoint(api frontend.API, curve twistededwards.Curve, data [2]frontend.Variable) (*twistededwards.Point, error) {
+func hashToPoint(api frontend.API, curve twistededwards.Curve, data [2]frontend.Variable, domainSeparator frontend.Variable) (*twistededwards.Point, error) {
 	hField, err := mimc.NewMiMC(api)
 	if err != nil {
 		return nil, err
 	}
 	hField.Write(data[0])
 	hField.Write(data[1])
+	hField.Write(domainSeparator)
 	hashedSecretData := hField.Sum()
 	hField.Reset()
 

@@ -8,8 +8,10 @@ import (
 	"encoding/binary"
 	"gnark-symmetric-crypto/utils"
 	"log"
+	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
+	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
@@ -60,7 +62,6 @@ type OPRFData struct {
 	C frontend.Variable `gnark:",public"`
 	S frontend.Variable `gnark:",public"`
 }
-
 type ChachaOPRFCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
 	Counter [BITS_PER_WORD]frontend.Variable
@@ -74,6 +75,10 @@ type ChachaOPRFCircuit struct {
 	OPRF *OPRFData
 }
 
+func (c *ChachaOPRFCircuit) Define(_ frontend.API) error {
+	return nil
+}
+
 type OPRFParams struct {
 	Pos             uint32  `json:"pos"`
 	Len             uint32  `json:"len"`
@@ -84,7 +89,6 @@ type OPRFParams struct {
 	C               []uint8 `json:"c"`
 	S               []uint8 `json:"s"`
 }
-
 type InputParams struct {
 	Cipher  string  `json:"cipher"`
 	Key     []uint8 `json:"key"`
@@ -99,7 +103,6 @@ type Prover interface {
 	SetParams(r1cs constraint.ConstraintSystem, pk groth16.ProvingKey)
 	Prove(params *InputParams) (proof []byte, output []uint8)
 }
-
 type baseProver struct {
 	r1cs constraint.ConstraintSystem
 	pk   groth16.ProvingKey
@@ -252,7 +255,7 @@ func (cp *ChaChaOPRFProver) SetParams(r1cs constraint.ConstraintSystem, pk groth
 }
 func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []uint8) {
 
-	key, nonce, counter, input := params.Key, params.Nonce, params.Counter, params.Input
+	key, nonce, counter, input, oprf := params.Key, params.Nonce, params.Counter, params.Input, params.OPRF
 
 	if len(key) != 32 {
 		log.Panicf("key length must be 32: %d", len(key))
@@ -287,13 +290,25 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 	bNonce := utils.BytesToUint32LEBits(nonce)
 	bCounter := utils.Uint32ToBits(counter)
 
-	witness := &ChaChaCircuit{}
+	witness := &ChachaOPRFCircuit{}
 
 	copy(witness.Key[:], bKey)
 	copy(witness.Nonce[:], bNonce)
 	witness.Counter = bCounter
 	copy(witness.In[:], bInput)
 	copy(witness.Out[:], bOutput)
+
+	witness.Pos = oprf.Pos
+	witness.Len = oprf.Len
+
+	witness.OPRF = &OPRFData{
+		Mask:            new(big.Int).SetBytes(oprf.Mask),
+		ServerResponse:  unmarshalPoint(oprf.ServerResponse),
+		ServerPublicKey: unmarshalPoint(oprf.ServerPublicKey),
+		Output:          unmarshalPoint(oprf.Output),
+		C:               new(big.Int).SetBytes(oprf.C),
+		S:               new(big.Int).SetBytes(oprf.S),
+	}
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField())
 	if err != nil {
@@ -309,4 +324,18 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 		panic(err)
 	}
 	return buf.Bytes(), output
+}
+
+func unmarshalPoint(b []byte) twistededwards.Point {
+
+	point := &tbn254.PointAffine{}
+	err := point.Unmarshal(b)
+	if err != nil {
+		panic(err)
+	}
+
+	return twistededwards.Point{
+		X: point.X.BigInt(&big.Int{}),
+		Y: point.Y.BigInt(&big.Int{}),
+	}
 }

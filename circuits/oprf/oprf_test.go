@@ -13,7 +13,7 @@ import (
 
 func TestOPRF(t *testing.T) {
 	assert := test.NewAssert(t)
-	testData, err := PrepareTestData("randomiiiiiiiiiiiiiizerrandomiiiiiiiiiiiiiizerrandomiiiiiiiiir")
+	testData, err := PrepareTestData("randomiiiiiiiiiiiiiizerrandomiiiiiiiiiiiiiizerrandomiiiiiiiiir", "")
 	assert.NoError(err)
 
 	circuit := OPRF{

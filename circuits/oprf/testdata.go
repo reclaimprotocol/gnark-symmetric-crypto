@@ -29,15 +29,20 @@ type TestData struct {
 }
 
 type OPRFRequest struct {
-	SecretElements [2]*big.Int
-	Mask           *big.Int
-	MaskedData     *tbn254.PointAffine
+	SecretElements  [2]*big.Int
+	Mask            *big.Int
+	MaskedData      *tbn254.PointAffine
+	DomainSeparator *big.Int
 }
 
-func GenerateOPRFRequest(secretData string) (*OPRFRequest, error) {
+func GenerateOPRFRequest(secretData, domainSeparator string) (*OPRFRequest, error) {
 	secretBytes := []byte(secretData)
 	if len(secretBytes) > 31*2 {
 		return nil, errors.New("secret data too big")
+	}
+	domainBytes := []byte(domainSeparator)
+	if len(domainBytes) > 31 {
+		return nil, errors.New("domain separator too big")
 	}
 
 	var secretElements [2]*big.Int
@@ -50,7 +55,7 @@ func GenerateOPRFRequest(secretData string) (*OPRFRequest, error) {
 		secretElements[1] = big.NewInt(0)
 	}
 
-	H := hashToCurve(secretElements[0].Bytes(), secretElements[1].Bytes()) // H
+	H := hashToCurve(secretElements[0].Bytes(), secretElements[1].Bytes(), domainBytes) // H
 	if !H.IsOnCurve() {
 		return nil, fmt.Errorf("point is not on curve")
 	}
@@ -64,17 +69,19 @@ func GenerateOPRFRequest(secretData string) (*OPRFRequest, error) {
 	// mask
 	masked := &tbn254.PointAffine{}
 	masked.ScalarMultiplication(H, mask) // H*mask
+
 	return &OPRFRequest{
-		SecretElements: secretElements,
-		Mask:           mask,
-		MaskedData:     masked,
+		SecretElements:  secretElements,
+		Mask:            mask,
+		MaskedData:      masked,
+		DomainSeparator: new(big.Int).SetBytes(domainBytes),
 	}, nil
 }
 
-func PrepareTestData(secretData string) (*OPRFData, error) {
+func PrepareTestData(secretData, domainSeparator string) (*OPRFData, error) {
 	curve := tbn254.GetEdwardsCurve()
 
-	req, err := GenerateOPRFRequest(secretData)
+	req, err := GenerateOPRFRequest(secretData, domainSeparator)
 	if err != nil {
 		return nil, err
 	}
@@ -103,6 +110,7 @@ func PrepareTestData(secretData string) (*OPRFData, error) {
 	return &OPRFData{
 		Response:        OutPointToInPoint(resp),
 		SecretData:      [2]frontend.Variable{req.SecretElements[0], req.SecretElements[1]},
+		DomainSeparator: req.DomainSeparator,
 		Output:          OutPointToInPoint(output),
 		Mask:            req.Mask,
 		ServerPublicKey: OutPointToInPoint(serverPublic),

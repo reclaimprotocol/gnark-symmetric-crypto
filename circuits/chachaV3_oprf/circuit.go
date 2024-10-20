@@ -12,6 +12,7 @@ const Blocks = 2
 
 type OPRFData struct {
 	Mask            frontend.Variable
+	DomainSeparator frontend.Variable    `gnark:",public"`
 	ServerResponse  twistededwards.Point `gnark:",public"`
 	ServerPublicKey twistededwards.Point `gnark:",public"`
 	Output          twistededwards.Point `gnark:",public"` // after this point is hashed it will be the "nullifier"
@@ -107,6 +108,7 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 	// check that OPRF output was created from secret data by a server with a specific public key
 	oprfData := &oprf.OPRFData{
 		SecretData:      [2]frontend.Variable{res[0], res[1]},
+		DomainSeparator: c.OPRF.DomainSeparator,
 		Mask:            c.OPRF.Mask,
 		Response:        c.OPRF.ServerResponse,
 		Output:          c.OPRF.Output,
