@@ -95,6 +95,9 @@ func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, S
 	hField.Write(basePoint.X)
 	hField.Write(basePoint.Y)
 
+	hField.Write(ServerPublicKey.X)
+	hField.Write(ServerPublicKey.Y)
+
 	hField.Write(t1.X)
 	hField.Write(t1.Y)
 

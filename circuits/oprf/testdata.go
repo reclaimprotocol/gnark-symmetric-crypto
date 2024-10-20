@@ -11,7 +11,7 @@ import (
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 )
 
-var BN254ScalarField = func() *big.Int { order := tbn254.GetEdwardsCurve().Order; return &order }()
+var TNBCurveOrder = func() *big.Int { order := tbn254.GetEdwardsCurve().Order; return &order }()
 
 type Proof struct {
 	ServerPublicKey twistededwards.Point
@@ -28,14 +28,19 @@ type TestData struct {
 	Proof      *Proof
 }
 
-func PrepareTestData(secretData string) (*OPRFData, error) {
-	curve := tbn254.GetEdwardsCurve()
+type OPRFRequest struct {
+	SecretElements [2]*big.Int
+	Mask           *big.Int
+	MaskedData     *tbn254.PointAffine
+}
+
+func GenerateOPRFRequest(secretData string) (*OPRFRequest, error) {
 	secretBytes := []byte(secretData)
 	if len(secretBytes) > 31*2 {
 		return nil, errors.New("secret data too big")
 	}
 
-	secretElements := make([]*big.Int, 2)
+	var secretElements [2]*big.Int
 
 	if len(secretBytes) > 31 {
 		secretElements[0] = new(big.Int).SetBytes(secretBytes[:31])
@@ -45,44 +50,61 @@ func PrepareTestData(secretData string) (*OPRFData, error) {
 		secretElements[1] = big.NewInt(0)
 	}
 
-	// random mask
-	mask, _ := rand.Int(rand.Reader, BN254ScalarField)
-
-	// server secret & public
-	sk, _ := rand.Int(rand.Reader, BN254ScalarField)
-	serverPublic := &tbn254.PointAffine{}
-	serverPublic.ScalarMultiplication(&curve.Base, sk) // G*sk
-
 	H := hashToCurve(secretElements[0].Bytes(), secretElements[1].Bytes()) // H
 	if !H.IsOnCurve() {
 		return nil, fmt.Errorf("point is not on curve")
 	}
 
+	// random mask
+	mask, err := rand.Int(rand.Reader, TNBCurveOrder)
+	if err != nil {
+		return nil, err
+	}
+
 	// mask
 	masked := &tbn254.PointAffine{}
-	masked.ScalarMultiplication(H, mask) // H*Proof
+	masked.ScalarMultiplication(H, mask) // H*mask
+	return &OPRFRequest{
+		SecretElements: secretElements,
+		Mask:           mask,
+		MaskedData:     masked,
+	}, nil
+}
+
+func PrepareTestData(secretData string) (*OPRFData, error) {
+	curve := tbn254.GetEdwardsCurve()
+
+	req, err := GenerateOPRFRequest(secretData)
+	if err != nil {
+		return nil, err
+	}
+
+	// server secret & public
+	sk, _ := rand.Int(rand.Reader, TNBCurveOrder)
+	serverPublic := &tbn254.PointAffine{}
+	serverPublic.ScalarMultiplication(&curve.Base, sk) // G*sk
 
 	// server part
 	resp := &tbn254.PointAffine{}
-	resp.ScalarMultiplication(masked, sk) // H*Proof*sk
+	resp.ScalarMultiplication(req.MaskedData, sk) // H*mask*sk
 
 	// output calc
 	invR := new(big.Int)
-	invR.ModInverse(mask, BN254ScalarField) // mask^-1
+	invR.ModInverse(req.Mask, TNBCurveOrder) // mask^-1
 
 	output := &tbn254.PointAffine{}
 	output.ScalarMultiplication(resp, invR) // H *mask * sk * mask^-1 = H * sk
 
-	c, r, err := ProveDLEQ(sk, serverPublic, resp, masked)
+	c, r, err := ProveDLEQ(sk, serverPublic, resp, req.MaskedData)
 	if err != nil {
 		return nil, err
 	}
 
 	return &OPRFData{
 		Response:        OutPointToInPoint(resp),
-		SecretData:      [2]frontend.Variable{secretElements[0], secretElements[1]},
+		SecretData:      [2]frontend.Variable{req.SecretElements[0], req.SecretElements[1]},
 		Output:          OutPointToInPoint(output),
-		Mask:            mask,
+		Mask:            req.Mask,
 		ServerPublicKey: OutPointToInPoint(serverPublic),
 		C:               c,
 		S:               r,

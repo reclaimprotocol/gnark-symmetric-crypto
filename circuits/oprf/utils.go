@@ -11,12 +11,13 @@ import (
 
 func ProveDLEQ(x *big.Int, xG, xH, H *tbn254.PointAffine) (*big.Int, *big.Int, error) {
 
-	// xG = G*x xH = H*x
+	// xG = G*x, xH = H*x
 
 	curve := tbn254.GetEdwardsCurve()
 	base := curve.Base
+
 	// random scalar
-	v, err := rand.Int(rand.Reader, BN254ScalarField)
+	v, err := rand.Int(rand.Reader, TNBCurveOrder)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -27,14 +28,14 @@ func ProveDLEQ(x *big.Int, xG, xH, H *tbn254.PointAffine) (*big.Int, *big.Int, e
 	vH := new(tbn254.PointAffine)
 	vH.ScalarMultiplication(H, v) // H*v
 
-	challengeHash := hashPoints(&base, vG, vH, H, xH)
+	challengeHash := hashPointsToScalar(&base, xG, vG, vH, H, xH)
 	c := new(big.Int).SetBytes(challengeHash)
 	// c.Mod(c, scalarField) // ?
 
 	r := new(big.Int).Neg(c) // Proof = -c
 	r.Mul(r, x)              // Proof = -c*x
 	r.Add(r, v)              // Proof = v - c*x
-	r.Mod(r, BN254ScalarField)
+	r.Mod(r, TNBCurveOrder)
 
 	// check Proof in house
 	/*
@@ -53,7 +54,7 @@ func ProveDLEQ(x *big.Int, xG, xH, H *tbn254.PointAffine) (*big.Int, *big.Int, e
 	cH.Add(rH, cH) // H * (v-c*x) + H*x*c =H*v − H*c*x + H*c*x = vH
 	assert.True(cH.Equal(vH))
 
-	verifyHash := hashPoints(&base, rg, cH, H, xH)
+	verifyHash := hashPointsToScalar(&base, rg, cH, H, xH)
 	verifyNum := new(big.Int).SetBytes(verifyHash)
 	assert.Equal(verifyNum, c)*/
 
@@ -68,12 +69,12 @@ func OutPointToInPoint(point *tbn254.PointAffine) twistededwards.Point {
 	return res
 }
 
-func hashBN(data ...[]byte) []byte {
+func hashToScalar(data ...[]byte) []byte {
 	hasher := hash.MIMC_BN254.New()
 	for _, d := range data {
 		t := d
 		if len(d) == 0 {
-			t = []byte{0} // otherwise hasher won't pick zero values
+			t = []byte{0} // otherwise hasher won't pick nil values
 		}
 		_, err := hasher.Write(t)
 		if err != nil {
@@ -83,7 +84,7 @@ func hashBN(data ...[]byte) []byte {
 	return hasher.Sum(nil)
 }
 
-func hashPoints(data ...*tbn254.PointAffine) []byte {
+func hashPointsToScalar(data ...*tbn254.PointAffine) []byte {
 	hasher := hash.MIMC_BN254.New()
 	for _, p := range data {
 		x := p.X.BigInt(new(big.Int))
@@ -101,7 +102,7 @@ func hashPoints(data ...*tbn254.PointAffine) []byte {
 }
 
 func hashToCurve(data ...[]byte) *tbn254.PointAffine {
-	hashedData := hashBN(data...)
+	hashedData := hashToScalar(data...)
 	scalar := new(big.Int).SetBytes(hashedData)
 	params := tbn254.GetEdwardsCurve()
 	multiplicationResult := &tbn254.PointAffine{}

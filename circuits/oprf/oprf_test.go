@@ -2,7 +2,6 @@ package oprf
 
 import (
 	"crypto/rand"
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -32,17 +31,16 @@ func TestMaskUnmask(t *testing.T) {
 	data.ScalarMultiplication(&base, big.NewInt(12345)) // just dummy data
 
 	// random scalar
-	r, err := rand.Int(rand.Reader, BN254ScalarField)
+	r, err := rand.Int(rand.Reader, TNBCurveOrder)
 	assert.NoError(err)
 
 	blinded := &tbn254.PointAffine{}
 	blinded.ScalarMultiplication(data, r)
 
 	invR := &big.Int{}
-	invR.ModInverse(r, BN254ScalarField)
+	invR.ModInverse(r, TNBCurveOrder)
 	deblinded := &tbn254.PointAffine{}
 	deblinded.ScalarMultiplication(blinded, invR)
-	fmt.Println(r, invR)
 	assert.True(deblinded.Equal(data))
 }
 
