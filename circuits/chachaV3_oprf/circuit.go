@@ -14,7 +14,7 @@ type OPRFData struct {
 	Mask            frontend.Variable
 	ServerResponse  twistededwards.Point `gnark:",public"`
 	ServerPublicKey twistededwards.Point `gnark:",public"`
-	Output          twistededwards.Point `gnark:",public"`
+	Output          twistededwards.Point `gnark:",public"` // after this point is hashed it will be the "nullifier"
 	// Proof values of DLEQ that ServerResponse was created with the same private key as server public key
 	C frontend.Variable `gnark:",public"`
 	S frontend.Variable `gnark:",public"`
@@ -83,7 +83,7 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 		}
 	}
 
-	// flattern input (plaintext)
+	// flatten input (plaintext)
 	for i := 0; i < len(c.In); i++ {
 		word := i * 32
 		for j := 0; j < BITS_PER_WORD; j++ {

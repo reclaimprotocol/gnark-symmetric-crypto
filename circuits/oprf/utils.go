@@ -32,9 +32,9 @@ func ProveDLEQ(x *big.Int, xG, xH, H *tbn254.PointAffine) (*big.Int, *big.Int, e
 	c := new(big.Int).SetBytes(challengeHash)
 	// c.Mod(c, scalarField) // ?
 
-	r := new(big.Int).Neg(c) // Proof = -c
-	r.Mul(r, x)              // Proof = -c*x
-	r.Add(r, v)              // Proof = v - c*x
+	r := new(big.Int).Neg(c) // -c
+	r.Mul(r, x)              // -c*x
+	r.Add(r, v)              // v - c*x
 	r.Mod(r, TNBCurveOrder)
 
 	// check Proof in house
@@ -42,13 +42,13 @@ func ProveDLEQ(x *big.Int, xG, xH, H *tbn254.PointAffine) (*big.Int, *big.Int, e
 		vG==rG+c(xG)
 		vH==rH+c(xH)
 	*/
-	/*rg := new(tbn254.PointAffine).ScalarMultiplication(&base, r) // G * Proof = G * (v-c*x)
+	/*rg := new(tbn254.PointAffine).ScalarMultiplication(&base, r) // G * Mask = G * (v-c*x)
 	chg := new(tbn254.PointAffine).ScalarMultiplication(xG, c)   // G*x*c
 
 	rg.Add(rg, chg) // G * (v-c*x) + G*x*c =G*v − G*c*x + G*c*x = vG
 	assert.True(rg.Equal(vG))
 
-	rH := new(tbn254.PointAffine).ScalarMultiplication(H, r)  // H * Proof = H * (v-c*x)
+	rH := new(tbn254.PointAffine).ScalarMultiplication(H, r)  // H * Mask = H * (v-c*x)
 	cH := new(tbn254.PointAffine).ScalarMultiplication(xH, c) // H*x*c
 
 	cH.Add(rH, cH) // H * (v-c*x) + H*x*c =H*v − H*c*x + H*c*x = vH
