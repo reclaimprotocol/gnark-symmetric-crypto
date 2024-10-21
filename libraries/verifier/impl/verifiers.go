@@ -2,6 +2,7 @@ package impl
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"gnark-symmetric-crypto/utils"
@@ -18,8 +19,10 @@ const CHACHA_BLOCKS = 1
 const CHACHA_OPRF_BLOCKS = 2
 
 type ChaChaCircuit struct {
-	In  [16 * CHACHA_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
-	Out [16 * CHACHA_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
+	Counter [BITS_PER_WORD]frontend.Variable                     `gnark:",public"`
+	Nonce   [3][BITS_PER_WORD]frontend.Variable                  `gnark:",public"`
+	In      [16 * CHACHA_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
+	Out     [16 * CHACHA_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 }
 
 func (c *ChaChaCircuit) Define(_ frontend.API) error {
@@ -29,8 +32,10 @@ func (c *ChaChaCircuit) Define(_ frontend.API) error {
 const AES_BLOCKS = 4
 
 type AESWrapper struct {
-	In  [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
-	Out [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Nonce      [12]frontend.Variable              `gnark:",public"`
+	Counter    frontend.Variable                  `gnark:",public"`
+	Plaintext  [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Ciphertext [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
 }
 
 func (circuit *AESWrapper) Define(_ frontend.API) error {
@@ -72,20 +77,27 @@ type ChachaVerifier struct {
 
 func (cv *ChachaVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 
-	if len(publicSignals) != 128 {
-		fmt.Printf("public signals must be 128 bytes, not %d\n", len(publicSignals))
+	if len(publicSignals) != 128+12+4 { // plaintext, nonce, counter, ciphertext
+		fmt.Printf("public signals must be 144 bytes, not %d\n", len(publicSignals))
 		return false
 	}
 
 	witness := &ChaChaCircuit{}
 
-	bSignals := utils.BytesToUint32BEBits(publicSignals)
+	bct := publicSignals[:64]
+	bpt := publicSignals[64+12+4:]
+	bNonce := publicSignals[64 : 64+12]
+	bCounter := publicSignals[64+12 : 64+12+4]
 
-	output := bSignals[:len(bSignals)/2]
-	input := bSignals[len(bSignals)/2:]
+	ciphertext := utils.BytesToUint32BEBits(bct)
+	plaintext := utils.BytesToUint32BEBits(bpt)
+	nonce := utils.BytesToUint32LEBits(bNonce)
+	counter := utils.Uint32ToBits(bCounter)
 
-	copy(witness.In[:], input)
-	copy(witness.Out[:], output)
+	copy(witness.In[:], plaintext)
+	copy(witness.Out[:], ciphertext)
+	copy(witness.Nonce[:], nonce)
+	witness.Counter = counter
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	if err != nil {
@@ -112,18 +124,27 @@ type AESVerifier struct {
 
 func (av *AESVerifier) Verify(bProof []byte, publicSignals []uint8) bool {
 
-	if len(publicSignals) != 128 {
+	if len(publicSignals) != 128+12+4 { // plaintext, nonce, counter, ciphertext
 		return false
 	}
 
-	output := publicSignals[:len(publicSignals)/2]
-	input := publicSignals[len(publicSignals)/2:]
+	ciphertext := publicSignals[:64]
+	plaintext := publicSignals[64+12+4:]
+	nonce := publicSignals[64 : 64+12]
+	bCounter := publicSignals[64+12 : 64+12+4]
 
 	witness := &AESWrapper{}
-	for i := 0; i < len(input); i++ {
-		witness.In[i] = input[i]
-		witness.Out[i] = output[i]
+
+	for i := 0; i < len(plaintext); i++ {
+		witness.Plaintext[i] = plaintext[i]
+		witness.Ciphertext[i] = ciphertext[i]
 	}
+
+	for i := 0; i < len(nonce); i++ {
+		witness.Nonce[i] = nonce[i]
+	}
+
+	witness.Counter = binary.BigEndian.Uint32(bCounter)
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	if err != nil {

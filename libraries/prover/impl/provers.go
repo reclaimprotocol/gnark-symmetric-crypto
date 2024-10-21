@@ -65,11 +65,11 @@ func (c *ChaChaCircuit) Define(_ frontend.API) error {
 }
 
 type AESWrapper struct {
-	Key     []frontend.Variable
-	Nonce   [12]frontend.Variable
-	Counter frontend.Variable
-	Input   [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
-	Output  [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Key        []frontend.Variable
+	Nonce      [12]frontend.Variable              `gnark:",public"`
+	Counter    frontend.Variable                  `gnark:",public"`
+	Plaintext  [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Ciphertext [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
 }
 
 func (circuit *AESWrapper) Define(_ frontend.API) error {
@@ -107,6 +107,7 @@ type Prover interface {
 	SetParams(r1cs constraint.ConstraintSystem, pk groth16.ProvingKey)
 	Prove(params *InputParams) (proof []byte, output []uint8)
 }
+
 type baseProver struct {
 	r1cs constraint.ConstraintSystem
 	pk   groth16.ProvingKey

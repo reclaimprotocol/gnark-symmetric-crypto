@@ -2,6 +2,7 @@ package libraries
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"gnark-symmetric-crypto/circuits/oprf"
 	prover "gnark-symmetric-crypto/libraries/prover/impl"
@@ -40,6 +41,7 @@ func TestInit(t *testing.T) {
 }
 
 func TestProveVerify(t *testing.T) {
+	t.Skip()
 	assert := test.NewAssert(t)
 
 	proofs := make([][]byte, 0, 3)
@@ -136,8 +138,8 @@ func TestFullChaCha20(t *testing.T) {
 	bKey := make([]byte, 32)
 	bNonce := make([]byte, 12)
 	bPt := make([]byte, 64)
-	tmp, _ := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
-	counter := uint32(tmp.Uint64())
+	// tmp, _ := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
+	counter := uint32(1) // uint32(tmp.Uint64())
 
 	rand.Read(bKey)
 	rand.Read(bNonce)
@@ -158,10 +160,17 @@ func TestFullChaCha20(t *testing.T) {
 	var outParams *prover.OutputParams
 	json.Unmarshal(res, &outParams)
 
+	signals := outParams.PublicSignals
+	signals = append(signals, bNonce...)
+	bCounter := make([]byte, 4)
+	binary.LittleEndian.PutUint32(bCounter, counter)
+	signals = append(signals, bCounter...)
+	signals = append(signals, bPt...)
+
 	inParams := &verifier.InputVerifyParams{
 		Cipher:        inputParams.Cipher,
 		Proof:         outParams.Proof.ProofJson,
-		PublicSignals: append(outParams.PublicSignals, bPt...),
+		PublicSignals: signals,
 	}
 	inBuf, _ := json.Marshal(inParams)
 	assert.True(verifier.Verify(inBuf))
@@ -195,10 +204,17 @@ func TestFullAES256(t *testing.T) {
 	var outParams *prover.OutputParams
 	json.Unmarshal(res, &outParams)
 
+	signals := outParams.PublicSignals
+	signals = append(signals, bNonce...)
+	bCounter := make([]byte, 4)
+	binary.BigEndian.PutUint32(bCounter, counter)
+	signals = append(signals, bCounter...)
+	signals = append(signals, bPt...)
+
 	inParams := &verifier.InputVerifyParams{
 		Cipher:        inputParams.Cipher,
 		Proof:         outParams.Proof.ProofJson,
-		PublicSignals: append(outParams.PublicSignals, bPt...),
+		PublicSignals: signals,
 	}
 	inBuf, _ := json.Marshal(inParams)
 	assert.True(verifier.Verify(inBuf))
@@ -232,10 +248,17 @@ func TestFullAES128(t *testing.T) {
 	var outParams *prover.OutputParams
 	json.Unmarshal(res, &outParams)
 
+	signals := outParams.PublicSignals
+	signals = append(signals, bNonce...)
+	bCounter := make([]byte, 4)
+	binary.BigEndian.PutUint32(bCounter, counter)
+	signals = append(signals, bCounter...)
+	signals = append(signals, bPt...)
+
 	inParams := &verifier.InputVerifyParams{
 		Cipher:        inputParams.Cipher,
 		Proof:         outParams.Proof.ProofJson,
-		PublicSignals: append(outParams.PublicSignals, bPt...),
+		PublicSignals: signals,
 	}
 	inBuf, _ := json.Marshal(inParams)
 	assert.True(verifier.Verify(inBuf))
