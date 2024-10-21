@@ -30,10 +30,9 @@ type OPRFParams struct {
 	S               []uint8 `json:"s"`
 }
 type InputChachaOPRFParams struct {
-	Cipher  string      `json:"cipher"`
+	Nonce   []uint8     `json:"nonce"`
 	Counter uint32      `json:"counter"`
-	Input   []uint8     `json:"input"` // usually it's redacted ciphertext
-	Output  []uint8     `json:"output"`
+	Input   []uint8     `json:"input"` // ciphertext
 	OPRF    *OPRFParams `json:"oprf"`
 }
 

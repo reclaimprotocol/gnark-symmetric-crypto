@@ -31,10 +31,10 @@ func (c *ChaChaCircuit) Define(_ frontend.API) error {
 }
 
 type AESWrapper struct {
-	Nonce      [12]frontend.Variable              `gnark:",public"`
-	Counter    frontend.Variable                  `gnark:",public"`
-	Plaintext  [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
-	Ciphertext [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Nonce   [12]frontend.Variable              `gnark:",public"`
+	Counter frontend.Variable                  `gnark:",public"`
+	In      [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Out     [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
 }
 
 func (circuit *AESWrapper) Define(_ frontend.API) error {
@@ -52,14 +52,15 @@ type OPRFData struct {
 }
 
 type ChachaOPRFCircuit struct {
-	In  [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"` // ciphertext
-	Out [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"` // plaintext
+	Counter [BITS_PER_WORD]frontend.Variable                          `gnark:",public"`
+	Nonce   [3][BITS_PER_WORD]frontend.Variable                       `gnark:",public"`
+	In      [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"` // ciphertext
 
-	// position & length of "secret data" to be hashed
+	// position & length of "secret data" to be hashed. In bytes
 	Pos frontend.Variable `gnark:",public"`
 	Len frontend.Variable `gnark:",public"`
 
-	OPRF *OPRFData
+	OPRF OPRFData
 }
 
 func (circuit *ChachaOPRFCircuit) Define(_ frontend.API) error {
@@ -135,8 +136,8 @@ func (av *AESVerifier) Verify(bProof []byte, publicSignals []uint8) bool {
 	witness := &AESWrapper{}
 
 	for i := 0; i < len(plaintext); i++ {
-		witness.Plaintext[i] = plaintext[i]
-		witness.Ciphertext[i] = ciphertext[i]
+		witness.In[i] = plaintext[i]
+		witness.Out[i] = ciphertext[i]
 	}
 
 	for i := 0; i < len(nonce); i++ {
@@ -171,9 +172,6 @@ type ChachaOPRFVerifier struct {
 }
 
 func (cv *ChachaOPRFVerifier) Verify(proof []byte, publicSignals []uint8) bool {
-
-	witness := &ChachaOPRFCircuit{}
-
 	var params *InputChachaOPRFParams
 	err := json.Unmarshal(publicSignals, &params)
 	if err != nil {
@@ -181,18 +179,26 @@ func (cv *ChachaOPRFVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 		return false
 	}
 
+	witness := &ChachaOPRFCircuit{
+		OPRF: OPRFData{
+			DomainSeparator: new(big.Int).SetBytes(params.OPRF.DomainSeparator),
+			ServerResponse:  utils.UnmarshalPoint(params.OPRF.ServerResponse),
+			ServerPublicKey: utils.UnmarshalPoint(params.OPRF.ServerPublicKey),
+			Output:          utils.UnmarshalPoint(params.OPRF.Output),
+			C:               new(big.Int).SetBytes(params.OPRF.C),
+			S:               new(big.Int).SetBytes(params.OPRF.S),
+		},
+	}
+
+	nonce := utils.BytesToUint32LEBits(params.Nonce)
+	counter := utils.Uint32ToBits(params.Counter)
+
 	copy(witness.In[:], utils.BytesToUint32BEBits(params.Input))
-	copy(witness.Out[:], utils.BytesToUint32BEBits(params.Output))
+	copy(witness.Nonce[:], nonce)
+	witness.Counter = counter
+
 	witness.Pos = params.OPRF.Pos
 	witness.Len = params.OPRF.Len
-	witness.OPRF = &OPRFData{
-		DomainSeparator: new(big.Int).SetBytes(params.OPRF.DomainSeparator),
-		ServerResponse:  utils.UnmarshalPoint(params.OPRF.ServerResponse),
-		ServerPublicKey: utils.UnmarshalPoint(params.OPRF.ServerPublicKey),
-		Output:          utils.UnmarshalPoint(params.OPRF.Output),
-		C:               new(big.Int).SetBytes(params.OPRF.C),
-		S:               new(big.Int).SetBytes(params.OPRF.S),
-	}
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	if err != nil {

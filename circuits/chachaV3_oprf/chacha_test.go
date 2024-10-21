@@ -9,6 +9,7 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend"
+	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/test"
@@ -129,7 +130,7 @@ func TestCipher(t *testing.T) {
 	rand.Read(bKey)
 	rand.Read(bNonce)
 
-	secretStr := "very very long secret secret data so very very loong very data" // max 62 bytes
+	secretStr := "test" // max 62 bytes
 	secretBytes := []byte(secretStr)
 	pos := 59
 	counter := 12345
@@ -153,16 +154,32 @@ func TestCipher(t *testing.T) {
 	assert.NoError(err)
 	assert.CheckCircuit(&witness, test.WithValidAssignment(&witness), test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254))
 
-	cs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &witness)
+	cs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &ChachaOPRFCircuit{})
 	assert.NoError(err)
 	fmt.Println(cs.GetNbConstraints(), cs.GetNbPublicVariables(), cs.GetNbSecretVariables())
+
+	pk, vk, err := groth16.Setup(cs)
+	assert.NoError(err)
+
+	witness = createWitness(d, bKey, bNonce, counter, ciphertext, plaintext, pos, len(secretBytes))
+	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
+	assert.NoError(err)
+
+	proof, err := groth16.Prove(cs, pk, wtns)
+	assert.NoError(err)
+
+	wtns, err = frontend.NewWitness(&witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
+	assert.NoError(err)
+
+	err = groth16.Verify(proof, vk, wtns)
+	assert.NoError(err)
 }
 
 func createWitness(d *oprf.OPRFData, bKey []uint8, bNonce []uint8, counter int, ciphertext []byte, plaintext []byte, pos, len int) ChachaOPRFCircuit {
 	witness := ChachaOPRFCircuit{
-		Pos: pos * 8,
-		Len: len * 8,
-		OPRF: &OPRFData{
+		Pos: pos,
+		Len: len,
+		OPRF: OPRFData{
 			Mask:            d.Mask,
 			DomainSeparator: d.DomainSeparator,
 			ServerResponse:  d.Response,

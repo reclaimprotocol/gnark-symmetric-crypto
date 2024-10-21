@@ -283,7 +283,7 @@ func TestFullChaCha20OPRF(t *testing.T) {
 
 	email := "test@email.com"
 	domainSeparator := "reclaim"
-	pos := uint32(10)
+	pos := uint32(59)
 	copy(bOutput[pos:], email)
 
 	cipher, err := chacha20.NewUnauthenticatedCipher(bKey, bNonce)
@@ -315,8 +315,8 @@ func TestFullChaCha20OPRF(t *testing.T) {
 		Counter: counter,
 		Input:   bInput,
 		OPRF: &prover.OPRFParams{
-			Pos:             pos * 8,
-			Len:             uint32(len([]byte(email)) * 8),
+			Pos:             pos,
+			Len:             uint32(len([]byte(email))),
 			Mask:            req.Mask.Bytes(),
 			DomainSeparator: []byte(domainSeparator),
 			ServerResponse:  resp.Response.Marshal(),
@@ -337,13 +337,12 @@ func TestFullChaCha20OPRF(t *testing.T) {
 	assert.NoError(err)
 
 	oprfParams := &verifier.InputChachaOPRFParams{
-		Cipher:  inputParams.Cipher,
+		Nonce:   bNonce,
 		Counter: counter,
 		Input:   bInput,
-		Output:  outParams.PublicSignals,
 		OPRF: &verifier.OPRFParams{
-			Pos:             10 * 8,
-			Len:             uint32(len([]byte(email)) * 8),
+			Pos:             pos,
+			Len:             uint32(len([]byte(email))),
 			DomainSeparator: []byte(domainSeparator),
 			ServerResponse:  resp.Response.Marshal(),
 			ServerPublicKey: serverPublic.Marshal(),
@@ -393,14 +392,6 @@ func Benchmark_ProveChacha(b *testing.B) {
 		prover.Prove([]byte(params))
 	}
 	b.ReportAllocs()
-}
-
-func toUint8(a []int) []uint8 {
-	res := make([]uint8, len(a))
-	for i, v := range a {
-		res[i] = uint8(v)
-	}
-	return res
 }
 
 func fetchFile(keyName string) ([]byte, error) {

@@ -86,20 +86,22 @@ type OPRFData struct {
 	C frontend.Variable `gnark:",public"`
 	S frontend.Variable `gnark:",public"`
 }
+
 type ChachaOPRFCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
-	Counter [BITS_PER_WORD]frontend.Variable
-	Nonce   [3][BITS_PER_WORD]frontend.Variable
+	Counter [BITS_PER_WORD]frontend.Variable                          `gnark:",public"`
+	Nonce   [3][BITS_PER_WORD]frontend.Variable                       `gnark:",public"`
 	In      [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"` // ciphertext
-	Out     [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"` // plaintext
+	Out     [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable // plaintext
 
-	// position & length of "secret data" to be hashed
-	Pos  frontend.Variable `gnark:",public"`
-	Len  frontend.Variable `gnark:",public"`
-	OPRF *OPRFData
+	// position & length of "secret data" to be hashed. In bytes
+	Pos frontend.Variable `gnark:",public"`
+	Len frontend.Variable `gnark:",public"`
+
+	OPRF OPRFData
 }
 
-func (c *ChachaOPRFCircuit) Define(_ frontend.API) error {
+func (circuit *ChachaOPRFCircuit) Define(_ frontend.API) error {
 	return nil
 }
 
@@ -295,7 +297,17 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 	bNonce := utils.BytesToUint32LEBits(nonce)
 	bCounter := utils.Uint32ToBits(counter)
 
-	witness := &ChachaOPRFCircuit{}
+	witness := &ChachaOPRFCircuit{
+		OPRF: OPRFData{
+			Mask:            new(big.Int).SetBytes(oprf.Mask),
+			DomainSeparator: new(big.Int).SetBytes(oprf.DomainSeparator),
+			ServerResponse:  utils.UnmarshalPoint(oprf.ServerResponse),
+			ServerPublicKey: utils.UnmarshalPoint(oprf.ServerPublicKey),
+			Output:          utils.UnmarshalPoint(oprf.Output),
+			C:               new(big.Int).SetBytes(oprf.C),
+			S:               new(big.Int).SetBytes(oprf.S),
+		},
+	}
 
 	copy(witness.Key[:], bKey)
 	copy(witness.Nonce[:], bNonce)
@@ -306,20 +318,11 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 	witness.Pos = oprf.Pos
 	witness.Len = oprf.Len
 
-	witness.OPRF = &OPRFData{
-		Mask:            new(big.Int).SetBytes(oprf.Mask),
-		DomainSeparator: new(big.Int).SetBytes(oprf.DomainSeparator),
-		ServerResponse:  utils.UnmarshalPoint(oprf.ServerResponse),
-		ServerPublicKey: utils.UnmarshalPoint(oprf.ServerPublicKey),
-		Output:          utils.UnmarshalPoint(oprf.Output),
-		C:               new(big.Int).SetBytes(oprf.C),
-		S:               new(big.Int).SetBytes(oprf.S),
-	}
-
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField())
 	if err != nil {
 		panic(err)
 	}
+
 	gProof, err := groth16.Prove(cp.r1cs, cp.pk, wtns, backend.WithSolverOptions(solver.WithHints(chachaV3_oprf.ExtractData)))
 	if err != nil {
 		panic(err)
@@ -329,5 +332,5 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 	if err != nil {
 		panic(err)
 	}
-	return buf.Bytes(), output
+	return buf.Bytes(), nil
 }

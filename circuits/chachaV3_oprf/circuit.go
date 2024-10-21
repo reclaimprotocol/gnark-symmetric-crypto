@@ -23,16 +23,16 @@ type OPRFData struct {
 
 type ChachaOPRFCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
-	Counter [BITS_PER_WORD]frontend.Variable
-	Nonce   [3][BITS_PER_WORD]frontend.Variable
+	Counter [BITS_PER_WORD]frontend.Variable              `gnark:",public"`
+	Nonce   [3][BITS_PER_WORD]frontend.Variable           `gnark:",public"`
 	In      [16 * Blocks][BITS_PER_WORD]frontend.Variable `gnark:",public"` // ciphertext
-	Out     [16 * Blocks][BITS_PER_WORD]frontend.Variable `gnark:",public"` // plaintext
+	Out     [16 * Blocks][BITS_PER_WORD]frontend.Variable // plaintext
 
-	// position & length of "secret data" to be hashed
-	Pos frontend.Variable `gnark:",public"` // in bits
-	Len frontend.Variable `gnark:",public"` // in bits
+	// position & length of "secret data" to be hashed. In bytes
+	Pos frontend.Variable `gnark:",public"`
+	Len frontend.Variable `gnark:",public"`
 
-	OPRF *OPRFData
+	OPRF OPRFData
 }
 
 func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
@@ -95,9 +95,12 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 
 	hintInputs := make([]frontend.Variable, 2+len(outBits))
 	copy(hintInputs[2:], outBits)
+	c.Pos = api.Mul(c.Pos, 8)
+	c.Len = api.Mul(c.Len, 8)
+	api.AssertIsLessOrEqual(api.Add(c.Pos, c.Len), 512*Blocks)
+
 	hintInputs[0] = c.Pos
 	hintInputs[1] = c.Len
-	api.AssertIsLessOrEqual(api.Add(c.Pos, c.Len), 512*Blocks)
 
 	// extract "secret data" from pos & size
 	res, err := api.Compiler().NewHint(ExtractData, 2, hintInputs...)
