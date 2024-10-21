@@ -186,6 +186,7 @@ func (cv *ChachaOPRFVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 	witness.Pos = params.OPRF.Pos
 	witness.Len = params.OPRF.Len
 	witness.OPRF = &OPRFData{
+		DomainSeparator: new(big.Int).SetBytes(params.OPRF.DomainSeparator),
 		ServerResponse:  utils.UnmarshalPoint(params.OPRF.ServerResponse),
 		ServerPublicKey: utils.UnmarshalPoint(params.OPRF.ServerPublicKey),
 		Output:          utils.UnmarshalPoint(params.OPRF.Output),

@@ -22,6 +22,7 @@ type InputVerifyParams struct {
 type OPRFParams struct {
 	Pos             uint32  `json:"pos"`
 	Len             uint32  `json:"len"`
+	DomainSeparator []uint8 `json:"domainSeparator"`
 	ServerResponse  []uint8 `json:"serverResponse"`
 	ServerPublicKey []uint8 `json:"serverPublicKey"`
 	Output          []uint8 `json:"output"`

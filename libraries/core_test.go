@@ -270,18 +270,19 @@ func TestFullChaCha20OPRF(t *testing.T) {
 	assert.True(prover.InitAlgorithm(prover.CHACHA20_OPRF, chachaOprfKey, chachaOprfr1cs))
 	bKey := make([]byte, 32)
 	bNonce := make([]byte, 12)
-	bPt := make([]byte, 128)
+	bIn := make([]byte, 128)
 	tmp, _ := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
 	counter := uint32(tmp.Uint64())
 
 	rand.Read(bKey)
 	rand.Read(bNonce)
-	rand.Read(bPt)
+	rand.Read(bIn)
 
 	email := "test@email.com"
-	copy(bPt[10:], email)
+	domainSeparator := "reclaim"
+	copy(bIn[10:], email)
 
-	req, err := oprf.GenerateOPRFRequest(email, "reclaim")
+	req, err := oprf.GenerateOPRFRequest(email, domainSeparator)
 	assert.NoError(err)
 
 	curve := tbn254.GetEdwardsCurve()
@@ -309,12 +310,12 @@ func TestFullChaCha20OPRF(t *testing.T) {
 		Key:     bKey,
 		Nonce:   bNonce,
 		Counter: counter,
-		Input:   bPt,
+		Input:   bIn,
 		OPRF: &prover.OPRFParams{
 			Pos:             10 * 8,
 			Len:             uint32(len([]byte(email)) * 8),
 			Mask:            req.Mask.Bytes(),
-			DomainSeparator: new(big.Int).SetBytes([]byte("reclaim")).Bytes(),
+			DomainSeparator: []byte(domainSeparator),
 			ServerResponse:  resp.Marshal(),
 			ServerPublicKey: serverPublic.Marshal(),
 			Output:          output.Marshal(),
@@ -327,16 +328,37 @@ func TestFullChaCha20OPRF(t *testing.T) {
 
 	res := prover.Prove(buf)
 	assert.True(len(res) > 0)
-	/*var outParams *prover.OutputParams
-	json.Unmarshal(res, &outParams)
+	var outParams *prover.OutputParams
+	err = json.Unmarshal(res, &outParams)
+	assert.NoError(err)
+
+	oprfParams := &verifier.InputChachaOPRFParams{
+		Cipher:  inputParams.Cipher,
+		Counter: counter,
+		Input:   bIn,
+		Output:  outParams.PublicSignals,
+		OPRF: &verifier.OPRFParams{
+			Pos:             10 * 8,
+			Len:             uint32(len([]byte(email)) * 8),
+			DomainSeparator: []byte(domainSeparator),
+			ServerResponse:  resp.Marshal(),
+			ServerPublicKey: serverPublic.Marshal(),
+			Output:          output.Marshal(),
+			C:               c.Bytes(),
+			S:               s.Bytes(),
+		},
+	}
+
+	publicSignals, err := json.Marshal(oprfParams)
+	assert.NoError(err)
 
 	inParams := &verifier.InputVerifyParams{
 		Cipher:        inputParams.Cipher,
 		Proof:         outParams.Proof.ProofJson,
-		PublicSignals: append(outParams.PublicSignals, bPt...),
+		PublicSignals: publicSignals,
 	}
 	inBuf, _ := json.Marshal(inParams)
-	assert.True(verifier.Verify(inBuf))*/
+	assert.True(verifier.Verify(inBuf))
 }
 
 func Benchmark_ProveAES128(b *testing.B) {
