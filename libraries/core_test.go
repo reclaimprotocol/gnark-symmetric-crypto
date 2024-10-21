@@ -137,20 +137,20 @@ func TestFullChaCha20(t *testing.T) {
 	assert.True(prover.InitAlgorithm(prover.CHACHA20, chachaKey, chachaR1CS))
 	bKey := make([]byte, 32)
 	bNonce := make([]byte, 12)
-	bPt := make([]byte, 64)
+	bIn := make([]byte, 64)
 	// tmp, _ := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
 	counter := uint32(1) // uint32(tmp.Uint64())
 
 	rand.Read(bKey)
 	rand.Read(bNonce)
-	rand.Read(bPt)
+	rand.Read(bIn)
 
 	inputParams := &prover.InputParams{
 		Cipher:  "chacha20",
 		Key:     bKey,
 		Nonce:   bNonce,
 		Counter: counter,
-		Input:   bPt,
+		Input:   bIn,
 	}
 
 	buf, _ := json.Marshal(inputParams)
@@ -165,14 +165,15 @@ func TestFullChaCha20(t *testing.T) {
 	bCounter := make([]byte, 4)
 	binary.LittleEndian.PutUint32(bCounter, counter)
 	signals = append(signals, bCounter...)
-	signals = append(signals, bPt...)
+	signals = append(signals, bIn...)
 
 	inParams := &verifier.InputVerifyParams{
 		Cipher:        inputParams.Cipher,
 		Proof:         outParams.Proof.ProofJson,
 		PublicSignals: signals,
 	}
-	inBuf, _ := json.Marshal(inParams)
+	inBuf, err := json.Marshal(inParams)
+	assert.NoError(err)
 	assert.True(verifier.Verify(inBuf))
 }
 

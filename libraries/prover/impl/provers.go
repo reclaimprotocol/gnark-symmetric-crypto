@@ -54,8 +54,8 @@ type InputParams struct {
 
 type ChaChaCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
-	Counter [BITS_PER_WORD]frontend.Variable
-	Nonce   [3][BITS_PER_WORD]frontend.Variable
+	Counter [BITS_PER_WORD]frontend.Variable              `gnark:",public"`
+	Nonce   [3][BITS_PER_WORD]frontend.Variable           `gnark:",public"`
 	In      [16 * BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 	Out     [16 * BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 }
@@ -65,11 +65,11 @@ func (c *ChaChaCircuit) Define(_ frontend.API) error {
 }
 
 type AESWrapper struct {
-	Key        []frontend.Variable
-	Nonce      [12]frontend.Variable              `gnark:",public"`
-	Counter    frontend.Variable                  `gnark:",public"`
-	Plaintext  [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
-	Ciphertext [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Key     []frontend.Variable
+	Nonce   [12]frontend.Variable              `gnark:",public"`
+	Counter frontend.Variable                  `gnark:",public"`
+	In      [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Out     [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
 }
 
 func (circuit *AESWrapper) Define(_ frontend.API) error {
@@ -135,7 +135,7 @@ func (cp *ChaChaProver) Prove(params *InputParams) (proof []byte, output []uint8
 		log.Panicf("input length must be 64: %d", len(input))
 	}
 
-	// calculate ciphertext ourselves
+	// calculate output ourselves
 
 	output = make([]byte, len(input))
 
@@ -227,10 +227,10 @@ func (ap *AESProver) Prove(params *InputParams) (proof []byte, output []uint8) {
 		circuit.Nonce[i] = nonce[i]
 	}
 	for i := 0; i < len(input); i++ {
-		circuit.Input[i] = input[i]
+		circuit.In[i] = input[i]
 	}
 	for i := 0; i < len(output); i++ {
-		circuit.Output[i] = output[i]
+		circuit.Out[i] = output[i]
 	}
 
 	wtns, err := frontend.NewWitness(circuit, ecc.BN254.ScalarField())

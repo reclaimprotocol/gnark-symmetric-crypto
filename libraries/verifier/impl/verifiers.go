@@ -16,6 +16,7 @@ import (
 
 const BITS_PER_WORD = 32
 const CHACHA_BLOCKS = 1
+const AES_BLOCKS = 4
 const CHACHA_OPRF_BLOCKS = 2
 
 type ChaChaCircuit struct {
@@ -28,8 +29,6 @@ type ChaChaCircuit struct {
 func (c *ChaChaCircuit) Define(_ frontend.API) error {
 	return nil
 }
-
-const AES_BLOCKS = 4
 
 type AESWrapper struct {
 	Nonce      [12]frontend.Variable              `gnark:",public"`
@@ -77,27 +76,27 @@ type ChachaVerifier struct {
 
 func (cv *ChachaVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 
-	if len(publicSignals) != 128+12+4 { // plaintext, nonce, counter, ciphertext
+	if len(publicSignals) != 128+12+4 { // in, nonce, counter, out
 		fmt.Printf("public signals must be 144 bytes, not %d\n", len(publicSignals))
 		return false
 	}
 
 	witness := &ChaChaCircuit{}
 
-	bct := publicSignals[:64]
-	bpt := publicSignals[64+12+4:]
+	bOut := publicSignals[:64]
+	bIn := publicSignals[64+12+4:]
 	bNonce := publicSignals[64 : 64+12]
 	bCounter := publicSignals[64+12 : 64+12+4]
 
-	ciphertext := utils.BytesToUint32BEBits(bct)
-	plaintext := utils.BytesToUint32BEBits(bpt)
+	out := utils.BytesToUint32BEBits(bOut)
+	in := utils.BytesToUint32BEBits(bIn)
 	nonce := utils.BytesToUint32LEBits(bNonce)
-	counter := utils.Uint32ToBits(bCounter)
+	counter := utils.BytesToUint32LEBits(bCounter)
 
-	copy(witness.In[:], plaintext)
-	copy(witness.Out[:], ciphertext)
+	copy(witness.In[:], in)
+	copy(witness.Out[:], out)
 	copy(witness.Nonce[:], nonce)
-	witness.Counter = counter
+	witness.Counter = counter[0]
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	if err != nil {
