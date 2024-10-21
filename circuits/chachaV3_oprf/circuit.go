@@ -29,8 +29,8 @@ type ChachaOPRFCircuit struct {
 	Out     [16 * Blocks][BITS_PER_WORD]frontend.Variable `gnark:",public"` // plaintext
 
 	// position & length of "secret data" to be hashed
-	Pos frontend.Variable `gnark:",public"`
-	Len frontend.Variable `gnark:",public"`
+	Pos frontend.Variable `gnark:",public"` // in bits
+	Len frontend.Variable `gnark:",public"` // in bits
 
 	OPRF *OPRFData
 }
@@ -100,7 +100,7 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 	api.AssertIsLessOrEqual(api.Add(c.Pos, c.Len), 512*Blocks)
 
 	// extract "secret data" from pos & size
-	res, err := api.Compiler().NewHint(extractData, 2, hintInputs...)
+	res, err := api.Compiler().NewHint(ExtractData, 2, hintInputs...)
 	if err != nil {
 		return err
 	}

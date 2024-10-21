@@ -15,15 +15,17 @@ import (
 )
 
 const (
-	CHACHA20 = 0
-	AES_128  = 1
-	AES_256  = 2
+	CHACHA20      = 0
+	AES_128       = 1
+	AES_256       = 2
+	CHACHA20_OPRF = 3
 )
 
 var algorithmNames = map[uint8]string{
-	CHACHA20: "chacha20",
-	AES_128:  "aes-128-ctr",
-	AES_256:  "aes-256-ctr",
+	CHACHA20:      "chacha20",
+	AES_128:       "aes-128-ctr",
+	AES_256:       "aes-256-ctr",
+	CHACHA20_OPRF: "chacha20-oprf",
 }
 
 var provers = map[string]*ProverParams{
@@ -41,6 +43,11 @@ var provers = map[string]*ProverParams{
 		KeyHash:     "5461d6bb5ec52fe8ddc8f2d9ae92f71561defc2d697f71801981edd4707e0519",
 		CircuitHash: "ba7cd2f17886cd68017e317887a3fc4743fa51daf2e932d8d9905b54c15abf95",
 		Prover:      &AESProver{},
+	},
+	"chacha20-oprf": {
+		KeyHash:     "bb23fe619448c69b9485d2567f997a7f3a6a76ff53a0d6471214413b9f8da857",
+		CircuitHash: "718c294dd68bdd9f3c0fa130255581e4bc51a9724a9cfc9aa93571cd355a47fc",
+		Prover:      &ChaChaOPRFProver{},
 	},
 }
 

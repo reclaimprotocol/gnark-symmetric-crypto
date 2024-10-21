@@ -6,14 +6,16 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
+	"gnark-symmetric-crypto/circuits/chachaV3_oprf"
 	"gnark-symmetric-crypto/utils"
 	"log"
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
-	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
+	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/constraint"
+	"github.com/consensys/gnark/constraint/solver"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
@@ -28,6 +30,27 @@ const BITS_PER_WORD = 32
 const BLOCKS = 1
 const AES_BLOCKS = 4
 const CHACHA_OPRF_BLOCKS = 2
+
+type OPRFParams struct {
+	Pos             uint32  `json:"pos"`
+	Len             uint32  `json:"len"`
+	Mask            []uint8 `json:"mask"`
+	DomainSeparator []uint8 `json:"domainSeparator"`
+	ServerResponse  []uint8 `json:"serverResponse"`
+	ServerPublicKey []uint8 `json:"serverPublicKey"`
+	Output          []uint8 `json:"output"`
+	C               []uint8 `json:"c"`
+	S               []uint8 `json:"s"`
+}
+type InputParams struct {
+	Cipher  string  `json:"cipher"`
+	Key     []uint8 `json:"key"`
+	Nonce   []uint8 `json:"nonce"`
+	Counter uint32  `json:"counter"`
+	Input   []uint8 `json:"input"` // usually it's redacted ciphertext
+	// for OPRF
+	OPRF *OPRFParams `json:"oprf"`
+}
 
 type ChaChaCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
@@ -55,6 +78,7 @@ func (circuit *AESWrapper) Define(_ frontend.API) error {
 
 type OPRFData struct {
 	Mask            frontend.Variable
+	DomainSeparator frontend.Variable    `gnark:",public"`
 	ServerResponse  twistededwards.Point `gnark:",public"`
 	ServerPublicKey twistededwards.Point `gnark:",public"`
 	Output          twistededwards.Point `gnark:",public"` // after this point is hashed it will be the "nullifier"
@@ -77,26 +101,6 @@ type ChachaOPRFCircuit struct {
 
 func (c *ChachaOPRFCircuit) Define(_ frontend.API) error {
 	return nil
-}
-
-type OPRFParams struct {
-	Pos             uint32  `json:"pos"`
-	Len             uint32  `json:"len"`
-	Mask            []uint8 `json:"mask"`
-	ServerResponse  []uint8 `json:"serverResponse"`
-	ServerPublicKey []uint8 `json:"serverPublicKey"`
-	Output          []uint8 `json:"output"`
-	C               []uint8 `json:"c"`
-	S               []uint8 `json:"s"`
-}
-type InputParams struct {
-	Cipher  string  `json:"cipher"`
-	Key     []uint8 `json:"key"`
-	Nonce   []uint8 `json:"nonce"`
-	Counter uint32  `json:"counter"`
-	Input   []uint8 `json:"input"` // usually it's redacted ciphertext
-	// for OPRF
-	OPRF *OPRFParams `json:"oprf"`
 }
 
 type Prover interface {
@@ -263,7 +267,7 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 	if len(nonce) != 12 {
 		log.Panicf("nonce length must be 12: %d", len(nonce))
 	}
-	if len(input) != 64 {
+	if len(input) != CHACHA_OPRF_BLOCKS*64 {
 		log.Panicf("input length must be 64: %d", len(input))
 	}
 
@@ -303,9 +307,10 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 
 	witness.OPRF = &OPRFData{
 		Mask:            new(big.Int).SetBytes(oprf.Mask),
-		ServerResponse:  unmarshalPoint(oprf.ServerResponse),
-		ServerPublicKey: unmarshalPoint(oprf.ServerPublicKey),
-		Output:          unmarshalPoint(oprf.Output),
+		DomainSeparator: new(big.Int).SetBytes(oprf.DomainSeparator),
+		ServerResponse:  utils.UnmarshalPoint(oprf.ServerResponse),
+		ServerPublicKey: utils.UnmarshalPoint(oprf.ServerPublicKey),
+		Output:          utils.UnmarshalPoint(oprf.Output),
 		C:               new(big.Int).SetBytes(oprf.C),
 		S:               new(big.Int).SetBytes(oprf.S),
 	}
@@ -314,7 +319,7 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 	if err != nil {
 		panic(err)
 	}
-	gProof, err := groth16.Prove(cp.r1cs, cp.pk, wtns)
+	gProof, err := groth16.Prove(cp.r1cs, cp.pk, wtns, backend.WithSolverOptions(solver.WithHints(chachaV3_oprf.ExtractData)))
 	if err != nil {
 		panic(err)
 	}
@@ -324,18 +329,4 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 		panic(err)
 	}
 	return buf.Bytes(), output
-}
-
-func unmarshalPoint(b []byte) twistededwards.Point {
-
-	point := &tbn254.PointAffine{}
-	err := point.Unmarshal(b)
-	if err != nil {
-		panic(err)
-	}
-
-	return twistededwards.Point{
-		X: point.X.BigInt(&big.Int{}),
-		Y: point.Y.BigInt(&big.Int{}),
-	}
 }

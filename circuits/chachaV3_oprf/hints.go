@@ -13,7 +13,7 @@ func init() {
 
 func GetHints() []solver.Hint {
 	return []solver.Hint{
-		extractData,
+		ExtractData,
 	}
 }
 
@@ -21,7 +21,7 @@ const bytesPerElement = 31
 const bitsPerElement = bytesPerElement * 8
 const maxSize = bitsPerElement * 2
 
-func extractData(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
+func ExtractData(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 	if len(inputs) != 2+512*Blocks {
 		return fmt.Errorf("expecting %d inputs, got %d", 2+512*Blocks, len(inputs))
 	}

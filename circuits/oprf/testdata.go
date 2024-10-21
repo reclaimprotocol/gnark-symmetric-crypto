@@ -95,17 +95,17 @@ func PrepareTestData(secretData, domainSeparator string) (*OPRFData, error) {
 	resp := &tbn254.PointAffine{}
 	resp.ScalarMultiplication(req.MaskedData, sk) // H*mask*sk
 
+	c, r, err := ProveDLEQ(sk, serverPublic, resp, req.MaskedData)
+	if err != nil {
+		return nil, err
+	}
+
 	// output calc
 	invR := new(big.Int)
 	invR.ModInverse(req.Mask, TNBCurveOrder) // mask^-1
 
 	output := &tbn254.PointAffine{}
 	output.ScalarMultiplication(resp, invR) // H *mask * sk * mask^-1 = H * sk
-
-	c, r, err := ProveDLEQ(sk, serverPublic, resp, req.MaskedData)
-	if err != nil {
-		return nil, err
-	}
 
 	return &OPRFData{
 		Response:        OutPointToInPoint(resp),

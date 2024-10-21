@@ -3,6 +3,7 @@ package libraries
 import (
 	"crypto/rand"
 	"encoding/json"
+	"gnark-symmetric-crypto/circuits/oprf"
 	prover "gnark-symmetric-crypto/libraries/prover/impl"
 	verifier "gnark-symmetric-crypto/libraries/verifier/impl"
 	"math"
@@ -11,19 +12,22 @@ import (
 	"sync"
 	"testing"
 
+	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	"github.com/consensys/gnark/test"
 )
 
-var chachaKey, aes128Key, aes256Key, chachaR1CS, aes128r1cs, aes256r1cs []byte
+var chachaKey, aes128Key, aes256Key, chachaOprfKey, chachaR1CS, aes128r1cs, aes256r1cs, chachaOprfr1cs []byte
 
 func init() {
 	chachaKey, _ = fetchFile("pk.chacha20")
 	aes128Key, _ = fetchFile("pk.aes128")
 	aes256Key, _ = fetchFile("pk.aes256")
+	chachaOprfKey, _ = fetchFile("pk.chacha20_oprf")
 
 	chachaR1CS, _ = fetchFile("r1cs.chacha20")
 	aes128r1cs, _ = fetchFile("r1cs.aes128")
 	aes256r1cs, _ = fetchFile("r1cs.aes256")
+	chachaOprfr1cs, _ = fetchFile("r1cs.chacha20_oprf")
 }
 
 func TestInit(t *testing.T) {
@@ -31,6 +35,7 @@ func TestInit(t *testing.T) {
 	assert.True(prover.InitAlgorithm(prover.CHACHA20, chachaKey, chachaR1CS))
 	assert.True(prover.InitAlgorithm(prover.AES_128, aes128Key, aes128r1cs))
 	assert.True(prover.InitAlgorithm(prover.AES_256, aes256Key, aes256r1cs))
+	assert.True(prover.InitAlgorithm(prover.CHACHA20_OPRF, chachaOprfKey, chachaOprfr1cs))
 
 }
 
@@ -234,6 +239,80 @@ func TestFullAES128(t *testing.T) {
 	}
 	inBuf, _ := json.Marshal(inParams)
 	assert.True(verifier.Verify(inBuf))
+}
+
+func TestFullChaCha20OPRF(t *testing.T) {
+	assert := test.NewAssert(t)
+	assert.True(prover.InitAlgorithm(prover.CHACHA20_OPRF, chachaOprfKey, chachaOprfr1cs))
+	bKey := make([]byte, 32)
+	bNonce := make([]byte, 12)
+	bPt := make([]byte, 128)
+	tmp, _ := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
+	counter := uint32(tmp.Uint64())
+
+	rand.Read(bKey)
+	rand.Read(bNonce)
+	rand.Read(bPt)
+
+	email := "test@email.com"
+	copy(bPt[10:], email)
+
+	req, err := oprf.GenerateOPRFRequest(email, "reclaim")
+	assert.NoError(err)
+
+	curve := tbn254.GetEdwardsCurve()
+	// server secret & public
+	sk, _ := rand.Int(rand.Reader, oprf.TNBCurveOrder)
+	serverPublic := &tbn254.PointAffine{}
+	serverPublic.ScalarMultiplication(&curve.Base, sk) // G*sk
+
+	// server part
+	resp := &tbn254.PointAffine{}
+	resp.ScalarMultiplication(req.MaskedData, sk) // H*mask*sk
+
+	c, s, err := oprf.ProveDLEQ(sk, serverPublic, resp, req.MaskedData)
+	assert.NoError(err)
+
+	// output calc
+	invR := new(big.Int)
+	invR.ModInverse(req.Mask, oprf.TNBCurveOrder) // mask^-1
+
+	output := &tbn254.PointAffine{}
+	output.ScalarMultiplication(resp, invR) // H *mask * sk * mask^-1 = H * sk
+
+	inputParams := &prover.InputParams{
+		Cipher:  "chacha20-oprf",
+		Key:     bKey,
+		Nonce:   bNonce,
+		Counter: counter,
+		Input:   bPt,
+		OPRF: &prover.OPRFParams{
+			Pos:             10 * 8,
+			Len:             uint32(len([]byte(email)) * 8),
+			Mask:            req.Mask.Bytes(),
+			DomainSeparator: new(big.Int).SetBytes([]byte("reclaim")).Bytes(),
+			ServerResponse:  resp.Marshal(),
+			ServerPublicKey: serverPublic.Marshal(),
+			Output:          output.Marshal(),
+			C:               c.Bytes(),
+			S:               s.Bytes(),
+		},
+	}
+
+	buf, _ := json.Marshal(inputParams)
+
+	res := prover.Prove(buf)
+	assert.True(len(res) > 0)
+	/*var outParams *prover.OutputParams
+	json.Unmarshal(res, &outParams)
+
+	inParams := &verifier.InputVerifyParams{
+		Cipher:        inputParams.Cipher,
+		Proof:         outParams.Proof.ProofJson,
+		PublicSignals: append(outParams.PublicSignals, bPt...),
+	}
+	inBuf, _ := json.Marshal(inParams)
+	assert.True(verifier.Verify(inBuf))*/
 }
 
 func Benchmark_ProveAES128(b *testing.B) {

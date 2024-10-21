@@ -4,7 +4,9 @@ import (
 	"encoding/binary"
 	"math/big"
 
+	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 )
 
 func BytesToUint32BEBits(in []uint8) [][32]frontend.Variable {
@@ -61,4 +63,18 @@ func BytesToUint32BERaw(in []uint8) []frontend.Variable {
 		res = append(res, t)
 	}
 	return res
+}
+
+func UnmarshalPoint(b []byte) twistededwards.Point {
+
+	point := &tbn254.PointAffine{}
+	err := point.Unmarshal(b)
+	if err != nil {
+		panic(err)
+	}
+
+	return twistededwards.Point{
+		X: point.X.BigInt(&big.Int{}),
+		Y: point.Y.BigInt(&big.Int{}),
+	}
 }
