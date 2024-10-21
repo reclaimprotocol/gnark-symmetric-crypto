@@ -7,6 +7,7 @@ import (
 	"gnark-symmetric-crypto/circuits/oprf"
 	prover "gnark-symmetric-crypto/libraries/prover/impl"
 	verifier "gnark-symmetric-crypto/libraries/verifier/impl"
+	"gnark-symmetric-crypto/utils"
 	"math"
 	"math/big"
 	"os"
@@ -291,7 +292,7 @@ func TestFullChaCha20OPRF(t *testing.T) {
 	cipher.SetCounter(counter)
 	cipher.XORKeyStream(bInput, bOutput)
 
-	req, err := oprf.GenerateOPRFRequest(email, domainSeparator)
+	req, err := utils.GenerateOPRFRequest(email, domainSeparator)
 	assert.NoError(err)
 
 	curve := tbn254.GetEdwardsCurve()
@@ -301,18 +302,11 @@ func TestFullChaCha20OPRF(t *testing.T) {
 	serverPublic.ScalarMultiplication(&curve.Base, sk) // G*sk
 
 	// server part
-	resp := &tbn254.PointAffine{}
-	resp.ScalarMultiplication(req.MaskedData, sk) // H*mask*sk
-
-	c, s, err := oprf.ProveDLEQ(sk, serverPublic, resp, req.MaskedData)
+	resp, err := utils.OPRF(sk, req.MaskedData)
 	assert.NoError(err)
 
-	// output calc
-	invR := new(big.Int)
-	invR.ModInverse(req.Mask, oprf.TNBCurveOrder) // mask^-1
-
-	output := &tbn254.PointAffine{}
-	output.ScalarMultiplication(resp, invR) // H *mask * sk * mask^-1 = H * sk
+	out, err := utils.ProcessOPRFResponse(serverPublic, req, resp)
+	assert.NoError(err)
 
 	inputParams := &prover.InputParams{
 		Cipher:  "chacha20-oprf",
@@ -325,11 +319,11 @@ func TestFullChaCha20OPRF(t *testing.T) {
 			Len:             uint32(len([]byte(email)) * 8),
 			Mask:            req.Mask.Bytes(),
 			DomainSeparator: []byte(domainSeparator),
-			ServerResponse:  resp.Marshal(),
+			ServerResponse:  resp.Response.Marshal(),
 			ServerPublicKey: serverPublic.Marshal(),
-			Output:          output.Marshal(),
-			C:               c.Bytes(),
-			S:               s.Bytes(),
+			Output:          out.Marshal(),
+			C:               resp.C.Bytes(),
+			S:               resp.S.Bytes(),
 		},
 	}
 
@@ -351,11 +345,11 @@ func TestFullChaCha20OPRF(t *testing.T) {
 			Pos:             10 * 8,
 			Len:             uint32(len([]byte(email)) * 8),
 			DomainSeparator: []byte(domainSeparator),
-			ServerResponse:  resp.Marshal(),
+			ServerResponse:  resp.Response.Marshal(),
 			ServerPublicKey: serverPublic.Marshal(),
-			Output:          output.Marshal(),
-			C:               c.Bytes(),
-			S:               s.Bytes(),
+			Output:          out.Marshal(),
+			C:               resp.C.Bytes(),
+			S:               resp.S.Bytes(),
 		},
 	}
 
