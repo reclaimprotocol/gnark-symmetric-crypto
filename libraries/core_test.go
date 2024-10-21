@@ -15,6 +15,7 @@ import (
 
 	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	"github.com/consensys/gnark/test"
+	"golang.org/x/crypto/chacha20"
 )
 
 var chachaKey, aes128Key, aes256Key, chachaOprfKey, chachaR1CS, aes128r1cs, aes256r1cs, chachaOprfr1cs []byte
@@ -270,17 +271,25 @@ func TestFullChaCha20OPRF(t *testing.T) {
 	assert.True(prover.InitAlgorithm(prover.CHACHA20_OPRF, chachaOprfKey, chachaOprfr1cs))
 	bKey := make([]byte, 32)
 	bNonce := make([]byte, 12)
-	bIn := make([]byte, 128)
+	bOutput := make([]byte, 128) // circuit output is plaintext
+	bInput := make([]byte, 128)
 	tmp, _ := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
 	counter := uint32(tmp.Uint64())
 
 	rand.Read(bKey)
 	rand.Read(bNonce)
-	rand.Read(bIn)
+	rand.Read(bOutput)
 
 	email := "test@email.com"
 	domainSeparator := "reclaim"
-	copy(bIn[10:], email)
+	pos := uint32(10)
+	copy(bOutput[pos:], email)
+
+	cipher, err := chacha20.NewUnauthenticatedCipher(bKey, bNonce)
+	assert.NoError(err)
+
+	cipher.SetCounter(counter)
+	cipher.XORKeyStream(bInput, bOutput)
 
 	req, err := oprf.GenerateOPRFRequest(email, domainSeparator)
 	assert.NoError(err)
@@ -310,9 +319,9 @@ func TestFullChaCha20OPRF(t *testing.T) {
 		Key:     bKey,
 		Nonce:   bNonce,
 		Counter: counter,
-		Input:   bIn,
+		Input:   bInput,
 		OPRF: &prover.OPRFParams{
-			Pos:             10 * 8,
+			Pos:             pos * 8,
 			Len:             uint32(len([]byte(email)) * 8),
 			Mask:            req.Mask.Bytes(),
 			DomainSeparator: []byte(domainSeparator),
@@ -324,7 +333,8 @@ func TestFullChaCha20OPRF(t *testing.T) {
 		},
 	}
 
-	buf, _ := json.Marshal(inputParams)
+	buf, err := json.Marshal(inputParams)
+	assert.NoError(err)
 
 	res := prover.Prove(buf)
 	assert.True(len(res) > 0)
@@ -335,7 +345,7 @@ func TestFullChaCha20OPRF(t *testing.T) {
 	oprfParams := &verifier.InputChachaOPRFParams{
 		Cipher:  inputParams.Cipher,
 		Counter: counter,
-		Input:   bIn,
+		Input:   bInput,
 		Output:  outParams.PublicSignals,
 		OPRF: &verifier.OPRFParams{
 			Pos:             10 * 8,

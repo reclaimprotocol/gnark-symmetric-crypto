@@ -36,7 +36,7 @@ type ChachaOPRFCircuit struct {
 }
 
 func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
-	inBits := make([]frontend.Variable, 16*Blocks*BITS_PER_WORD)
+	outBits := make([]frontend.Variable, 16*Blocks*BITS_PER_WORD)
 	var state [16][BITS_PER_WORD]frontend.Variable
 	counter := c.Counter
 
@@ -67,15 +67,15 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 		Serialize(&state)
 
 		// xor keystream with input
-		var ciphertext [16][BITS_PER_WORD]frontend.Variable
+		var output [16][BITS_PER_WORD]frontend.Variable
 		for i, s := range state {
-			xor32(api, &c.In[b*16+i], &s, &ciphertext[i])
+			xor32(api, &c.In[b*16+i], &s, &output[i])
 		}
 
-		// check that output matches ciphertext
+		// check that output matches calculated output
 		for i := 0; i < 16; i++ {
 			for j := 0; j < BITS_PER_WORD; j++ {
-				api.AssertIsEqual(c.Out[b*16+i][j], ciphertext[i][j])
+				api.AssertIsEqual(c.Out[b*16+i][j], output[i][j])
 			}
 		}
 		// increment counter for next block
@@ -84,17 +84,17 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 		}
 	}
 
-	// flatten input (plaintext)
-	for i := 0; i < len(c.In); i++ {
+	// flatten output (plaintext)
+	for i := 0; i < len(c.Out); i++ {
 		word := i * 32
 		for j := 0; j < BITS_PER_WORD; j++ {
 			nByte := 3 - j/8 // switch endianness back
-			inBits[word+j] = c.In[i][nByte*8+j%8]
+			outBits[word+j] = c.Out[i][nByte*8+j%8]
 		}
 	}
 
-	hintInputs := make([]frontend.Variable, 2+len(inBits))
-	copy(hintInputs[2:], inBits)
+	hintInputs := make([]frontend.Variable, 2+len(outBits))
+	copy(hintInputs[2:], outBits)
 	hintInputs[0] = c.Pos
 	hintInputs[1] = c.Len
 	api.AssertIsLessOrEqual(api.Add(c.Pos, c.Len), 512*Blocks)

@@ -1,8 +1,6 @@
 package main
 
 import (
-	aesv2 "gnark-symmetric-crypto/circuits/aesV2"
-	"gnark-symmetric-crypto/circuits/chachaV3"
 	"gnark-symmetric-crypto/circuits/chachaV3_oprf"
 	"time"
 
@@ -17,10 +15,10 @@ import (
 
 func main() {
 
-	generateCircuitFiles(&chachaV3.ChaChaCircuit{}, "chacha20")
+	// generateCircuitFiles(&chachaV3.ChaChaCircuit{}, "chacha20")
 	generateCircuitFiles(&chachaV3_oprf.ChachaOPRFCircuit{OPRF: &chachaV3_oprf.OPRFData{}}, "chacha20_oprf")
 
-	aes128 := &aesv2.AES128Wrapper{
+	/*aes128 := &aesv2.AES128Wrapper{
 		AESWrapper: aesv2.AESWrapper{
 			Key: make([]frontend.Variable, 16),
 		},
@@ -33,7 +31,7 @@ func main() {
 			Key: make([]frontend.Variable, 32),
 		},
 	}
-	generateCircuitFiles(aes256, "aes256")
+	generateCircuitFiles(aes256, "aes256")*/
 
 }
 

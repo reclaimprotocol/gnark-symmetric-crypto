@@ -136,18 +136,18 @@ func TestCipher(t *testing.T) {
 	plaintext := make([]byte, Blocks*64)
 	copy(plaintext[pos:], secretBytes)
 
-	bCt := make([]byte, Blocks*64)
+	ciphertext := make([]byte, Blocks*64)
 
 	cipher, err := chacha20.NewUnauthenticatedCipher(bKey, bNonce)
 	assert.NoError(err)
 
 	cipher.SetCounter(uint32(counter))
-	cipher.XORKeyStream(bCt, plaintext)
+	cipher.XORKeyStream(ciphertext, plaintext)
 
 	d, err := oprf.PrepareTestData(secretStr, "reclaim")
 	assert.NoError(err)
 
-	witness := createWitness(d, bKey, bNonce, counter, bCt, plaintext, pos, len(secretBytes))
+	witness := createWitness(d, bKey, bNonce, counter, ciphertext, plaintext, pos, len(secretBytes))
 
 	err = test.IsSolved(&witness, &witness, ecc.BN254.ScalarField())
 	assert.NoError(err)
@@ -158,7 +158,7 @@ func TestCipher(t *testing.T) {
 	fmt.Println(cs.GetNbConstraints(), cs.GetNbPublicVariables(), cs.GetNbSecretVariables())
 }
 
-func createWitness(d *oprf.OPRFData, bKey []uint8, bNonce []uint8, counter int, bCt []byte, plaintext []byte, pos, len int) ChachaOPRFCircuit {
+func createWitness(d *oprf.OPRFData, bKey []uint8, bNonce []uint8, counter int, ciphertext []byte, plaintext []byte, pos, len int) ChachaOPRFCircuit {
 	witness := ChachaOPRFCircuit{
 		Pos: pos * 8,
 		Len: len * 8,
@@ -176,7 +176,7 @@ func createWitness(d *oprf.OPRFData, bKey []uint8, bNonce []uint8, counter int, 
 	copy(witness.Key[:], utils.BytesToUint32LEBits(bKey))
 	copy(witness.Nonce[:], utils.BytesToUint32LEBits(bNonce))
 	witness.Counter = utils.Uint32ToBits(counter)
-	copy(witness.In[:], utils.BytesToUint32BEBits(plaintext))
-	copy(witness.Out[:], utils.BytesToUint32BEBits(bCt))
+	copy(witness.In[:], utils.BytesToUint32BEBits(ciphertext))
+	copy(witness.Out[:], utils.BytesToUint32BEBits(plaintext))
 	return witness
 }
