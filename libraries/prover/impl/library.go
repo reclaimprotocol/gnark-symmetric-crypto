@@ -11,7 +11,7 @@ import (
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/constraint"
-	"github.com/rs/zerolog"
+	"github.com/consensys/gnark/logger"
 )
 
 const (
@@ -68,7 +68,7 @@ type ProverParams struct {
 }
 
 func init() {
-	zerolog.SetGlobalLevel(zerolog.Disabled)
+	logger.Disable()
 }
 
 func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) (res bool) {

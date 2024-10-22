@@ -9,8 +9,7 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"github.com/consensys/gnark/logger"
 )
 
 type InputVerifyParams struct {
@@ -51,7 +50,7 @@ var vkAES256Embedded []byte
 var vkChachaOPRFEmbedded []byte
 
 func init() {
-	zerolog.SetGlobalLevel(zerolog.Disabled)
+	logger.Disable()
 
 	vk := groth16.NewVerifyingKey(ecc.BN254)
 	_, err := vk.ReadFrom(bytes.NewBuffer(vkChachaEmbedded))
@@ -98,7 +97,7 @@ func Verify(params []byte) (res bool) {
 	var inputParams *InputVerifyParams
 	err := json.Unmarshal(params, &inputParams)
 	if err != nil {
-		log.Err(err)
+		fmt.Println(err)
 		return false
 	}
 

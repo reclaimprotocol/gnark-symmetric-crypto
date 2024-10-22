@@ -13,7 +13,7 @@ import (
 var TNBCurveOrder = func() *big.Int { order := twistededwards.GetEdwardsCurve().Order; return &order }()
 
 type OPRFRequest struct {
-	Mask           *big.Int
+	Mask           *big.Int `json:"mask"`
 	MaskedData     *twistededwards.PointAffine
 	SecretElements [2]*big.Int
 }
