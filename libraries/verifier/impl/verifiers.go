@@ -56,9 +56,9 @@ type ChachaOPRFCircuit struct {
 	Nonce   [3][BITS_PER_WORD]frontend.Variable                       `gnark:",public"`
 	In      [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"` // ciphertext
 
-	// position & length of "secret data" to be hashed. In bytes
-	Pos frontend.Variable `gnark:",public"`
-	Len frontend.Variable `gnark:",public"`
+	// bit mask & length of "secret data" to be hashed in bytes
+	BitMask [16 * CHACHA_OPRF_BLOCKS * BITS_PER_WORD]frontend.Variable `gnark:",public"`
+	Len     frontend.Variable                                          `gnark:",public"`
 
 	OPRF OPRFData
 }
@@ -197,7 +197,7 @@ func (cv *ChachaOPRFVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 	copy(witness.Nonce[:], nonce)
 	witness.Counter = counter
 
-	witness.Pos = params.OPRF.Pos
+	utils.SetBitmask(witness.BitMask[:], params.OPRF.Pos, params.OPRF.Len)
 	witness.Len = params.OPRF.Len
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())

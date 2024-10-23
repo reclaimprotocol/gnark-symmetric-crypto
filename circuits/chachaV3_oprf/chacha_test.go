@@ -130,9 +130,10 @@ func TestCipher(t *testing.T) {
 	rand.Read(bKey)
 	rand.Read(bNonce)
 
-	secretStr := "test" // max 62 bytes
+	secretStr := "1" // max 62 bytes
 	secretBytes := []byte(secretStr)
-	pos := 59
+
+	pos := 127
 	counter := 12345
 	plaintext := make([]byte, Blocks*64)
 	copy(plaintext[pos:], secretBytes)
@@ -150,6 +151,8 @@ func TestCipher(t *testing.T) {
 
 	witness := createWitness(d, bKey, bNonce, counter, ciphertext, plaintext, pos, len(secretBytes))
 
+	utils.SetBitmask(witness.BitMask[:], uint32(pos), uint32(len(secretBytes)))
+
 	err = test.IsSolved(&witness, &witness, ecc.BN254.ScalarField())
 	assert.NoError(err)
 	assert.CheckCircuit(&witness, test.WithValidAssignment(&witness), test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254))
@@ -162,6 +165,9 @@ func TestCipher(t *testing.T) {
 	assert.NoError(err)
 
 	witness = createWitness(d, bKey, bNonce, counter, ciphertext, plaintext, pos, len(secretBytes))
+
+	utils.SetBitmask(witness.BitMask[:], uint32(pos), uint32(len(secretBytes)))
+
 	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
 	assert.NoError(err)
 
@@ -177,7 +183,7 @@ func TestCipher(t *testing.T) {
 
 func createWitness(d *oprf.OPRFData, bKey []uint8, bNonce []uint8, counter int, ciphertext []byte, plaintext []byte, pos, len int) ChachaOPRFCircuit {
 	witness := ChachaOPRFCircuit{
-		Pos: pos,
+		// Pos: pos,
 		Len: len,
 		OPRF: OPRFData{
 			Mask:            d.Mask,

@@ -6,24 +6,20 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
-	"gnark-symmetric-crypto/circuits/chachaV3_oprf"
 	"gnark-symmetric-crypto/utils"
 	"log"
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/constraint"
-	"github.com/consensys/gnark/constraint/solver"
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"golang.org/x/crypto/chacha20"
 )
 
 func init() {
-	std.RegisterHints()
+	// std.RegisterHints()
 }
 
 const BITS_PER_WORD = 32
@@ -94,9 +90,9 @@ type ChachaOPRFCircuit struct {
 	In      [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"` // ciphertext
 	Out     [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable // plaintext
 
-	// position & length of "secret data" to be hashed. In bytes
-	Pos frontend.Variable `gnark:",public"`
-	Len frontend.Variable `gnark:",public"`
+	// bit mask & length of "secret data" to be hashed in bytes
+	BitMask [16 * CHACHA_OPRF_BLOCKS * BITS_PER_WORD]frontend.Variable `gnark:",public"`
+	Len     frontend.Variable                                          `gnark:",public"`
 
 	OPRF OPRFData
 }
@@ -315,7 +311,7 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 	copy(witness.In[:], bInput)
 	copy(witness.Out[:], bOutput)
 
-	witness.Pos = oprf.Pos
+	utils.SetBitmask(witness.BitMask[:], oprf.Pos, oprf.Len)
 	witness.Len = oprf.Len
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField())
@@ -323,7 +319,7 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 		panic(err)
 	}
 
-	gProof, err := groth16.Prove(cp.r1cs, cp.pk, wtns, backend.WithSolverOptions(solver.WithHints(chachaV3_oprf.ExtractData)))
+	gProof, err := groth16.Prove(cp.r1cs, cp.pk, wtns)
 	if err != nil {
 		panic(err)
 	}

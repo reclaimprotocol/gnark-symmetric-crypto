@@ -2,13 +2,16 @@ package chachaV3_oprf
 
 import (
 	"gnark-symmetric-crypto/circuits/oprf"
+	"math/big"
 
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/consensys/gnark/std/math/bits"
+	"github.com/consensys/gnark/std/math/cmp"
 )
 
 const Blocks = 2
+const BytesPerElement = 31
 
 type OPRFData struct {
 	Mask            frontend.Variable
@@ -23,13 +26,13 @@ type OPRFData struct {
 
 type ChachaOPRFCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
-	Counter [BITS_PER_WORD]frontend.Variable              `gnark:",public"`
-	Nonce   [3][BITS_PER_WORD]frontend.Variable           `gnark:",public"`
-	In      [16 * Blocks][BITS_PER_WORD]frontend.Variable `gnark:",public"` // ciphertext
-	Out     [16 * Blocks][BITS_PER_WORD]frontend.Variable // plaintext
+	Counter [BITS_PER_WORD]frontend.Variable               `gnark:",public"`
+	Nonce   [3][BITS_PER_WORD]frontend.Variable            `gnark:",public"`
+	In      [16 * Blocks][BITS_PER_WORD]frontend.Variable  `gnark:",public"` // ciphertext
+	Out     [16 * Blocks][BITS_PER_WORD]frontend.Variable  // plaintext
+	BitMask [16 * Blocks * BITS_PER_WORD]frontend.Variable `gnark:",public"` // bit mask for bits being hashed
 
-	// position & length of "secret data" to be hashed. In bytes
-	Pos frontend.Variable `gnark:",public"`
+	// Length of "secret data" elements to be hashed. In bytes
 	Len frontend.Variable `gnark:",public"`
 
 	OPRF OPRFData
@@ -84,33 +87,51 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 		}
 	}
 
-	// flatten output (plaintext)
+	// flatten result bits array
 	for i := 0; i < len(c.Out); i++ {
 		word := i * 32
 		for j := 0; j < BITS_PER_WORD; j++ {
-			nByte := 3 - j/8 // switch endianness back
+			nByte := 3 - j/8 // switch endianness back to original
 			outBits[word+j] = c.Out[i][nByte*8+j%8]
 		}
 	}
 
-	hintInputs := make([]frontend.Variable, 2+len(outBits))
-	copy(hintInputs[2:], outBits)
-	c.Pos = api.Mul(c.Pos, 8)
-	c.Len = api.Mul(c.Len, 8)
-	api.AssertIsLessOrEqual(api.Add(c.Pos, c.Len), 512*Blocks)
+	pow1 := frontend.Variable(1)
+	pow2 := frontend.Variable(0)
+	res1 := frontend.Variable(0)
+	res2 := frontend.Variable(0)
+	totalBits := frontend.Variable(0)
 
-	hintInputs[0] = c.Pos
-	hintInputs[1] = c.Len
+	for i := 0; i < 128; i++ {
+		for j := 0; j < 8; j++ {
 
-	// extract "secret data" from pos & size
-	res, err := api.Compiler().NewHint(ExtractData, 2, hintInputs...)
-	if err != nil {
-		return err
+			bitIndex := i*8 + j
+			bitIsSet := c.BitMask[bitIndex]
+			bit := api.Select(bitIsSet, outBits[bitIndex], 0)
+
+			res1 = api.Add(res1, api.Mul(bit, pow1))
+			res2 = api.Add(res2, api.Mul(bit, pow2))
+
+			n := api.Add(bitIsSet, 1) // do we need to multiply power by 2?
+			pow2 = api.Mul(pow2, n)
+			pow1 = api.Mul(pow1, n)
+
+			totalBits = api.Add(totalBits, bitIsSet)
+
+			r1Done := api.IsZero(api.Sub(totalBits, BytesPerElement*8)) // are we done with 1st number?
+			pow1 = api.Mul(pow1, api.Sub(1, r1Done))                    // set pow1 to zero if yes
+			pow2 = api.Add(pow2, r1Done)                                // set pow2 to 1 to start increasing
+
+		}
 	}
+
+	comparator := cmp.NewBoundedComparator(api, big.NewInt(16*Blocks*BITS_PER_WORD-BytesPerElement*8*2), false)
+	comparator.AssertIsLessEq(totalBits, BytesPerElement*8*2)
+	api.AssertIsEqual(totalBits, api.Mul(c.Len, 8)) // and that we processed correct number of bits
 
 	// check that OPRF output was created from secret data by a server with a specific public key
 	oprfData := &oprf.OPRFData{
-		SecretData:      [2]frontend.Variable{res[0], res[1]},
+		SecretData:      [2]frontend.Variable{res1, res2},
 		DomainSeparator: c.OPRF.DomainSeparator,
 		Mask:            c.OPRF.Mask,
 		Response:        c.OPRF.ServerResponse,

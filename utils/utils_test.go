@@ -33,5 +33,5 @@ func TestOPRF(t *testing.T) {
 	res, err := ProcessOPRFResponse(serverPublic, req, resp)
 	require.NoError(t, err)
 
-	require.Equal(t, "xuSdALh2k/3vdz8037ElVxjyiLpBNfqQ1SC3IAUdZao=", base64.StdEncoding.EncodeToString(res.Marshal()))
+	require.Equal(t, "jH6BFWtyH0HQGJCJ+vM9eIkBdXrLypeAOSmwz2UtxYs=", base64.StdEncoding.EncodeToString(res.Marshal()))
 }

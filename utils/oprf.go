@@ -8,6 +8,7 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	"github.com/consensys/gnark-crypto/hash"
+	"github.com/consensys/gnark/frontend"
 )
 
 var TNBCurveOrder = func() *big.Int { order := twistededwards.GetEdwardsCurve().Order; return &order }()
@@ -37,10 +38,10 @@ func GenerateOPRFRequest(secretData, domainSeparator string) (*OPRFRequest, erro
 	var secretElements [2]*big.Int
 
 	if len(secretBytes) > 31 {
-		secretElements[0] = new(big.Int).SetBytes(secretBytes[:31])
-		secretElements[1] = new(big.Int).SetBytes(secretBytes[31:])
+		secretElements[0] = new(big.Int).SetBytes(BEtoLE(secretBytes[:31]))
+		secretElements[1] = new(big.Int).SetBytes(BEtoLE(secretBytes[31:]))
 	} else {
-		secretElements[0] = new(big.Int).SetBytes(secretBytes)
+		secretElements[0] = new(big.Int).SetBytes(BEtoLE(secretBytes))
 		secretElements[1] = big.NewInt(0)
 	}
 
@@ -191,4 +192,29 @@ func HashToCurve(data ...[]byte) *twistededwards.PointAffine {
 	multiplicationResult := &twistededwards.PointAffine{}
 	multiplicationResult.ScalarMultiplication(&params.Base, scalar)
 	return multiplicationResult
+}
+
+func SetBitmask(bits []frontend.Variable, pos, length uint32) {
+
+	p := pos * 8
+	l := length * 8
+
+	if (p + l) > uint32(len(bits)) {
+		panic("invalid pos & len, out of bounds")
+	}
+
+	for i := uint32(0); i < uint32(len(bits)); i++ {
+		if (i >= p) && (i < (p + l)) {
+			bits[i] = 1
+		} else {
+			bits[i] = 0
+		}
+	}
+}
+
+func BEtoLE(b []byte) []byte {
+	for i := 0; i < len(b)/2; i++ {
+		b[i], b[len(b)-1-i] = b[len(b)-1-i], b[i]
+	}
+	return b
 }

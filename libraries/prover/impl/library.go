@@ -45,8 +45,8 @@ var provers = map[string]*ProverParams{
 		Prover:      &AESProver{},
 	},
 	"chacha20-oprf": {
-		KeyHash:     "f7cb9c0d47f67276922490c517c67ad5617962815726a7ff87146bfdb21c0d7d",
-		CircuitHash: "6861ea35536eaff165b46b90d02c00b23785280da602c87c1d4f9fa6f84eb384",
+		KeyHash:     "f40e30d4722066b936a02c3e554cea39d3301fbd090596f7eb54a34c40df3b5a",
+		CircuitHash: "111de49e07750056bb8cb4d5ef49a479ead8d12cdcc75dcaadefca4316c5ece1",
 		Prover:      &ChaChaOPRFProver{},
 	},
 }
