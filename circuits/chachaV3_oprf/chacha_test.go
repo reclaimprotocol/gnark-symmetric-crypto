@@ -130,10 +130,10 @@ func TestCipher(t *testing.T) {
 	rand.Read(bKey)
 	rand.Read(bNonce)
 
-	secretStr := "1" // max 62 bytes
+	secretStr := "00000000001111111111000000000011" // max 62 bytes
 	secretBytes := []byte(secretStr)
 
-	pos := 127
+	pos := 128 - 62
 	counter := 12345
 	plaintext := make([]byte, Blocks*64)
 	copy(plaintext[pos:], secretBytes)
@@ -151,8 +151,6 @@ func TestCipher(t *testing.T) {
 
 	witness := createWitness(d, bKey, bNonce, counter, ciphertext, plaintext, pos, len(secretBytes))
 
-	utils.SetBitmask(witness.BitMask[:], uint32(pos), uint32(len(secretBytes)))
-
 	err = test.IsSolved(&witness, &witness, ecc.BN254.ScalarField())
 	assert.NoError(err)
 	assert.CheckCircuit(&witness, test.WithValidAssignment(&witness), test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254))
@@ -165,25 +163,20 @@ func TestCipher(t *testing.T) {
 	assert.NoError(err)
 
 	witness = createWitness(d, bKey, bNonce, counter, ciphertext, plaintext, pos, len(secretBytes))
-
-	utils.SetBitmask(witness.BitMask[:], uint32(pos), uint32(len(secretBytes)))
-
 	wtns, err := frontend.NewWitness(&witness, ecc.BN254.ScalarField())
 	assert.NoError(err)
 
 	proof, err := groth16.Prove(cs, pk, wtns)
 	assert.NoError(err)
 
-	wtns, err = frontend.NewWitness(&witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
+	wPub, err := wtns.Public()
 	assert.NoError(err)
-
-	err = groth16.Verify(proof, vk, wtns)
+	err = groth16.Verify(proof, vk, wPub)
 	assert.NoError(err)
 }
 
 func createWitness(d *oprf.OPRFData, bKey []uint8, bNonce []uint8, counter int, ciphertext []byte, plaintext []byte, pos, len int) ChachaOPRFCircuit {
 	witness := ChachaOPRFCircuit{
-		// Pos: pos,
 		Len: len,
 		OPRF: OPRFData{
 			Mask:            d.Mask,
@@ -201,5 +194,6 @@ func createWitness(d *oprf.OPRFData, bKey []uint8, bNonce []uint8, counter int, 
 	witness.Counter = utils.Uint32ToBits(counter)
 	copy(witness.In[:], utils.BytesToUint32BEBits(ciphertext))
 	copy(witness.Out[:], utils.BytesToUint32BEBits(plaintext))
+	utils.SetBitmask(witness.BitMask[:], uint32(pos), uint32(len))
 	return witness
 }

@@ -102,32 +102,31 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 	res2 := frontend.Variable(0)
 	totalBits := frontend.Variable(0)
 
-	for i := 0; i < 128; i++ {
-		for j := 0; j < 8; j++ {
+	for i := 0; i < 16*Blocks*BITS_PER_WORD; i++ {
+		bitIndex := i
+		bitIsSet := c.BitMask[bitIndex]
+		bit := api.Select(bitIsSet, outBits[bitIndex], 0)
 
-			bitIndex := i*8 + j
-			bitIsSet := c.BitMask[bitIndex]
-			bit := api.Select(bitIsSet, outBits[bitIndex], 0)
+		res1 = api.Add(res1, api.Mul(bit, pow1))
+		res2 = api.Add(res2, api.Mul(bit, pow2))
 
-			res1 = api.Add(res1, api.Mul(bit, pow1))
-			res2 = api.Add(res2, api.Mul(bit, pow2))
+		n := api.Add(bitIsSet, 1) // do we need to multiply power by 2?
+		pow2 = api.Mul(pow2, n)
+		pow1 = api.Mul(pow1, n)
 
-			n := api.Add(bitIsSet, 1) // do we need to multiply power by 2?
-			pow2 = api.Mul(pow2, n)
-			pow1 = api.Mul(pow1, n)
+		totalBits = api.Add(totalBits, bitIsSet)
 
-			totalBits = api.Add(totalBits, bitIsSet)
+		r1Done := api.IsZero(api.Sub(totalBits, BytesPerElement*8)) // are we done with 1st number?
+		pow1 = api.Mul(pow1, api.Sub(1, r1Done))                    // set pow1 to zero if yes
+		pow2 = api.Add(pow2, r1Done)                                // set pow2 to 1 to start increasing
 
-			r1Done := api.IsZero(api.Sub(totalBits, BytesPerElement*8)) // are we done with 1st number?
-			pow1 = api.Mul(pow1, api.Sub(1, r1Done))                    // set pow1 to zero if yes
-			pow2 = api.Add(pow2, r1Done)                                // set pow2 to 1 to start increasing
-
-		}
 	}
 
-	comparator := cmp.NewBoundedComparator(api, big.NewInt(16*Blocks*BITS_PER_WORD-BytesPerElement*8*2), false)
-	comparator.AssertIsLessEq(totalBits, BytesPerElement*8*2)
-	api.AssertIsEqual(totalBits, api.Mul(c.Len, 8)) // and that we processed correct number of bits
+	api.AssertIsDifferent(c.Len, 0) // Len != 0
+
+	comparator := cmp.NewBoundedComparator(api, big.NewInt(16*Blocks*BITS_PER_WORD-BytesPerElement*8*2), false) // max diff is 1024-496
+	comparator.AssertIsLessEq(totalBits, BytesPerElement*8*2)                                                   // check that number of processed bits <= 62 bytes
+	api.AssertIsEqual(totalBits, api.Mul(c.Len, 8))                                                             // and that it corresponds to Len
 
 	// check that OPRF output was created from secret data by a server with a specific public key
 	oprfData := &oprf.OPRFData{
