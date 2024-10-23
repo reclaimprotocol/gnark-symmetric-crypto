@@ -12,6 +12,7 @@ import (
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/logger"
+	"github.com/consensys/gnark/std"
 )
 
 const (
@@ -69,6 +70,7 @@ type ProverParams struct {
 
 func init() {
 	logger.Disable()
+	std.RegisterHints()
 }
 
 func InitAlgorithm(algorithmID uint8, provingKey []byte, r1csData []byte) (res bool) {
