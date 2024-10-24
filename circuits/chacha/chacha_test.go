@@ -152,6 +152,7 @@ func BytesToUint32LE(in []uint8) []uints.U32 {
 	}
 	return res
 }
+
 func BytesToUint32BE(in []uint8) []uints.U32 {
 
 	var res []uints.U32
