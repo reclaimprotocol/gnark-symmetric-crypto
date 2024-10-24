@@ -58,7 +58,6 @@ func VerifyOPRF(api frontend.API, n *OPRFData) error {
 	}
 
 	masked := curve.ScalarMul(*dataPoint, n.Mask)
-	curve.AssertIsOnCurve(masked)
 
 	err = checkDLEQ(api, curve, masked, n.Response, n.ServerPublicKey, n.C, n.S)
 	if err != nil {
