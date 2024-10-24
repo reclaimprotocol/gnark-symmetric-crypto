@@ -1,7 +1,7 @@
 package oprf
 
 import (
-	twistededwards2 "github.com/consensys/gnark-crypto/ecc/twistededwards"
+	tbn "github.com/consensys/gnark-crypto/ecc/twistededwards"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/consensys/gnark/std/hash/mimc"
@@ -30,7 +30,7 @@ func (n *OPRF) Define(api frontend.API) error {
 }
 
 func VerifyOPRF(api frontend.API, n *OPRFData) error {
-	curve, err := twistededwards.NewEdCurve(api, twistededwards2.BN254)
+	curve, err := twistededwards.NewEdCurve(api, tbn.BN254)
 	if err != nil {
 		return err
 	}
