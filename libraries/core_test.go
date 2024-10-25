@@ -43,7 +43,6 @@ func TestInit(t *testing.T) {
 }
 
 func TestProveVerify(t *testing.T) {
-	t.Skip()
 	assert := test.NewAssert(t)
 
 	proofs := make([][]byte, 0, 3)
@@ -61,10 +60,17 @@ func TestProveVerify(t *testing.T) {
 		var inParams *prover.InputParams
 		json.Unmarshal([]byte(params), &inParams)
 
+		signals := outParams.PublicSignals
+		signals = append(signals, inParams.Nonce...)
+		bCounter := make([]byte, 4)
+		binary.LittleEndian.PutUint32(bCounter, inParams.Counter)
+		signals = append(signals, bCounter...)
+		signals = append(signals, inParams.Input...)
+
 		inParams2 := &verifier.InputVerifyParams{
 			Cipher:        "chacha20",
 			Proof:         outParams.Proof.ProofJson,
-			PublicSignals: append(outParams.PublicSignals, inParams.Input...),
+			PublicSignals: signals,
 		}
 		inBuf, _ := json.Marshal(inParams2)
 		proofs = append(proofs, inBuf)
@@ -83,10 +89,17 @@ func TestProveVerify(t *testing.T) {
 		var inParams *prover.InputParams
 		json.Unmarshal([]byte(params), &inParams)
 
+		signals := outParams.PublicSignals
+		signals = append(signals, inParams.Nonce...)
+		bCounter := make([]byte, 4)
+		binary.BigEndian.PutUint32(bCounter, inParams.Counter)
+		signals = append(signals, bCounter...)
+		signals = append(signals, inParams.Input...)
+
 		inParams2 := &verifier.InputVerifyParams{
 			Cipher:        "aes-128-ctr",
 			Proof:         outParams.Proof.ProofJson,
-			PublicSignals: append(outParams.PublicSignals, inParams.Input...),
+			PublicSignals: signals,
 		}
 		inBuf, _ := json.Marshal(inParams2)
 		proofs = append(proofs, inBuf)
@@ -104,11 +117,17 @@ func TestProveVerify(t *testing.T) {
 
 		var inParams *prover.InputParams
 		json.Unmarshal([]byte(params), &inParams)
+		signals := outParams.PublicSignals
+		signals = append(signals, inParams.Nonce...)
+		bCounter := make([]byte, 4)
+		binary.BigEndian.PutUint32(bCounter, inParams.Counter)
+		signals = append(signals, bCounter...)
+		signals = append(signals, inParams.Input...)
 
 		inParams2 := &verifier.InputVerifyParams{
 			Cipher:        "aes-256-ctr",
 			Proof:         outParams.Proof.ProofJson,
-			PublicSignals: append(outParams.PublicSignals, inParams.Input...),
+			PublicSignals: signals,
 		}
 		inBuf, _ := json.Marshal(inParams2)
 		proofs = append(proofs, inBuf)
