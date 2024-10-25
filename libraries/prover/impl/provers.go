@@ -45,7 +45,7 @@ type InputParams struct {
 	Counter uint32  `json:"counter"`
 	Input   []uint8 `json:"input"` // usually it's redacted ciphertext
 	// for OPRF
-	OPRF *OPRFParams `json:"oprf"`
+	OPRF *OPRFParams `json:"oprf,omitempty"`
 }
 
 type ChaChaCircuit struct {
