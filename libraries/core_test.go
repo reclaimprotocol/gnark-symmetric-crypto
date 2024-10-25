@@ -159,8 +159,8 @@ func TestFullChaCha20(t *testing.T) {
 	bKey := make([]byte, 32)
 	bNonce := make([]byte, 12)
 	bIn := make([]byte, 64)
-	// tmp, _ := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
-	counter := uint32(1) // uint32(tmp.Uint64())
+	tmp, _ := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
+	counter := uint32(tmp.Uint64())
 
 	rand.Read(bKey)
 	rand.Read(bNonce)
