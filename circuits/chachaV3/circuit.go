@@ -10,8 +10,8 @@ const Blocks = 1
 
 type ChaChaCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
-	Counter [BITS_PER_WORD]frontend.Variable
-	Nonce   [3][BITS_PER_WORD]frontend.Variable
+	Counter [BITS_PER_WORD]frontend.Variable              `gnark:",public"`
+	Nonce   [3][BITS_PER_WORD]frontend.Variable           `gnark:",public"`
 	In      [16 * Blocks][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 	Out     [16 * Blocks][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 }
@@ -48,19 +48,21 @@ func (c *ChaChaCircuit) Define(api frontend.API) error {
 		Serialize(&state)
 
 		// xor keystream with input
-		var ciphertext [16][BITS_PER_WORD]frontend.Variable
+		var output [16][BITS_PER_WORD]frontend.Variable
 		for i, s := range state {
-			xor32(api, &c.In[b*16+i], &s, &ciphertext[i])
+			xor32(api, &c.In[b*16+i], &s, &output[i])
 		}
 
 		// check that output matches ciphertext
 		for i := 0; i < 16; i++ {
 			for j := 0; j < BITS_PER_WORD; j++ {
-				api.AssertIsEqual(c.Out[b*16+i][j], ciphertext[i][j])
+				api.AssertIsEqual(c.Out[b*16+i][j], output[i][j])
 			}
 		}
 		// increment counter for next block
-		// add32(api, &counter, &one)
+		if b+1 < Blocks {
+			add32(api, &counter, &one)
+		}
 	}
 
 	return nil

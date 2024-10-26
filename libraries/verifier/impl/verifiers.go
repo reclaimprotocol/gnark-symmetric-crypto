@@ -2,35 +2,68 @@ package impl
 
 import (
 	"bytes"
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"gnark-symmetric-crypto/utils"
+	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
-	"github.com/rs/zerolog/log"
+	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 )
 
 const BITS_PER_WORD = 32
 const CHACHA_BLOCKS = 1
+const AES_BLOCKS = 4
+const CHACHA_OPRF_BLOCKS = 2
 
 type ChaChaCircuit struct {
-	In  [16 * CHACHA_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
-	Out [16 * CHACHA_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
+	Counter [BITS_PER_WORD]frontend.Variable                     `gnark:",public"`
+	Nonce   [3][BITS_PER_WORD]frontend.Variable                  `gnark:",public"`
+	In      [16 * CHACHA_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
+	Out     [16 * CHACHA_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 }
 
 func (c *ChaChaCircuit) Define(_ frontend.API) error {
 	return nil
 }
 
-const AES_BLOCKS = 4
-
 type AESWrapper struct {
-	Plaintext  [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
-	Ciphertext [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Nonce   [12]frontend.Variable              `gnark:",public"`
+	Counter frontend.Variable                  `gnark:",public"`
+	In      [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
+	Out     [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
 }
 
 func (circuit *AESWrapper) Define(_ frontend.API) error {
+	return nil
+}
+
+type OPRFData struct {
+	DomainSeparator frontend.Variable    `gnark:",public"`
+	ServerResponse  twistededwards.Point `gnark:",public"`
+	ServerPublicKey twistededwards.Point `gnark:",public"`
+	Output          twistededwards.Point `gnark:",public"` // after this point is hashed it will be the "nullifier"
+	// Proof values of DLEQ that ServerResponse was created with the same private key as server public key
+	C frontend.Variable `gnark:",public"`
+	S frontend.Variable `gnark:",public"`
+}
+
+type ChachaOPRFCircuit struct {
+	Counter [BITS_PER_WORD]frontend.Variable                          `gnark:",public"`
+	Nonce   [3][BITS_PER_WORD]frontend.Variable                       `gnark:",public"`
+	In      [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"` // ciphertext
+
+	// bit mask & length of "secret data" to be hashed in bytes
+	BitMask [16 * CHACHA_OPRF_BLOCKS * BITS_PER_WORD]frontend.Variable `gnark:",public"`
+	Len     frontend.Variable                                          `gnark:",public"`
+
+	OPRF OPRFData
+}
+
+func (circuit *ChachaOPRFCircuit) Define(_ frontend.API) error {
 	return nil
 }
 
@@ -44,28 +77,31 @@ type ChachaVerifier struct {
 
 func (cv *ChachaVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 
-	if len(publicSignals) != 128 {
-		fmt.Printf("public signals must be 128 bytes, not %d\n", len(publicSignals))
+	if len(publicSignals) != 128+12+4 { // in, nonce, counter, out
+		fmt.Printf("public signals must be 144 bytes, not %d\n", len(publicSignals))
 		return false
 	}
 
 	witness := &ChaChaCircuit{}
 
-	bSignals := utils.BytesToUint32BEBits(publicSignals)
+	bOut := publicSignals[:64]
+	bIn := publicSignals[64+12+4:]
+	bNonce := publicSignals[64 : 64+12]
+	bCounter := publicSignals[64+12 : 64+12+4]
 
-	ciphertext := bSignals[:len(bSignals)/2]
-	plaintext := bSignals[len(bSignals)/2:]
+	out := utils.BytesToUint32BEBits(bOut)
+	in := utils.BytesToUint32BEBits(bIn)
+	nonce := utils.BytesToUint32LEBits(bNonce)
+	counter := utils.BytesToUint32LEBits(bCounter)
 
-	for i := 0; i < len(witness.In); i++ {
-		for j := 0; j < len(witness.In[i]); j++ {
-			witness.In[i][j] = plaintext[i][j]
-			witness.Out[i][j] = ciphertext[i][j]
-		}
-	}
+	copy(witness.In[:], in)
+	copy(witness.Out[:], out)
+	copy(witness.Nonce[:], nonce)
+	witness.Counter = counter[0]
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	if err != nil {
-		log.Err(err)
+		fmt.Println(err)
 		return false
 	}
 
@@ -88,18 +124,27 @@ type AESVerifier struct {
 
 func (av *AESVerifier) Verify(bProof []byte, publicSignals []uint8) bool {
 
-	if len(publicSignals) != 128 {
+	if len(publicSignals) != 128+12+4 { // plaintext, nonce, counter, ciphertext
 		return false
 	}
 
-	ciphertext := publicSignals[:len(publicSignals)/2]
-	plaintext := publicSignals[len(publicSignals)/2:]
+	ciphertext := publicSignals[:64]
+	plaintext := publicSignals[64+12+4:]
+	nonce := publicSignals[64 : 64+12]
+	bCounter := publicSignals[64+12 : 64+12+4]
 
 	witness := &AESWrapper{}
+
 	for i := 0; i < len(plaintext); i++ {
-		witness.Plaintext[i] = plaintext[i]
-		witness.Ciphertext[i] = ciphertext[i]
+		witness.In[i] = plaintext[i]
+		witness.Out[i] = ciphertext[i]
 	}
+
+	for i := 0; i < len(nonce); i++ {
+		witness.Nonce[i] = nonce[i]
+	}
+
+	witness.Counter = binary.BigEndian.Uint32(bCounter)
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	if err != nil {
@@ -120,4 +165,56 @@ func (av *AESVerifier) Verify(bProof []byte, publicSignals []uint8) bool {
 	}
 
 	return true
+}
+
+type ChachaOPRFVerifier struct {
+	vk groth16.VerifyingKey
+}
+
+func (cv *ChachaOPRFVerifier) Verify(proof []byte, publicSignals []uint8) bool {
+	var params *InputChachaOPRFParams
+	err := json.Unmarshal(publicSignals, &params)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+
+	witness := &ChachaOPRFCircuit{
+		OPRF: OPRFData{
+			DomainSeparator: new(big.Int).SetBytes(params.OPRF.DomainSeparator),
+			ServerResponse:  utils.UnmarshalPoint(params.OPRF.ServerResponse),
+			ServerPublicKey: utils.UnmarshalPoint(params.OPRF.ServerPublicKey),
+			Output:          utils.UnmarshalPoint(params.OPRF.Output),
+			C:               new(big.Int).SetBytes(params.OPRF.C),
+			S:               new(big.Int).SetBytes(params.OPRF.S),
+		},
+	}
+
+	nonce := utils.BytesToUint32LEBits(params.Nonce)
+	counter := utils.Uint32ToBits(params.Counter)
+
+	copy(witness.In[:], utils.BytesToUint32BEBits(params.Input))
+	copy(witness.Nonce[:], nonce)
+	witness.Counter = counter
+
+	utils.SetBitmask(witness.BitMask[:], params.OPRF.Pos, params.OPRF.Len)
+	witness.Len = params.OPRF.Len
+
+	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+
+	gProof := groth16.NewProof(ecc.BN254)
+	_, err = gProof.ReadFrom(bytes.NewBuffer(proof))
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+	err = groth16.Verify(gProof, cv.vk, wtns)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return err == nil
 }
