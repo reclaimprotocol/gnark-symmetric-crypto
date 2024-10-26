@@ -60,7 +60,9 @@ func (c *ChaChaCircuit) Define(api frontend.API) error {
 			}
 		}
 		// increment counter for next block
-		// add32(api, &counter, &one)
+		if b+1 < Blocks {
+			add32(api, &counter, &one)
+		}
 	}
 
 	return nil
