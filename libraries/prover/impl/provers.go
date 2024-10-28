@@ -13,12 +13,13 @@ import (
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std"
+	"github.com/rs/zerolog"
 	"golang.org/x/crypto/chacha20"
 )
 
 func init() {
-	std.RegisterHints()
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	// std.RegisterHints()
 }
 
 const BITS_PER_WORD = 32
@@ -27,8 +28,8 @@ const AES_BLOCKS = 4
 
 type ChaChaCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
-	Counter [BITS_PER_WORD]frontend.Variable
-	Nonce   [3][BITS_PER_WORD]frontend.Variable
+	Counter [BITS_PER_WORD]frontend.Variable              `gnark:",public"`
+	Nonce   [3][BITS_PER_WORD]frontend.Variable           `gnark:",public"`
 	In      [16 * BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 	Out     [16 * BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
 }
@@ -39,8 +40,8 @@ func (c *ChaChaCircuit) Define(_ frontend.API) error {
 
 type AESWrapper struct {
 	Key        []frontend.Variable
-	Nonce      [12]frontend.Variable
-	Counter    frontend.Variable
+	Nonce      [12]frontend.Variable              `gnark:",public"`
+	Counter    frontend.Variable                  `gnark:",public"`
 	Plaintext  [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
 	Ciphertext [AES_BLOCKS * 16]frontend.Variable `gnark:",public"`
 }
@@ -194,13 +195,13 @@ func (ap *AESProver) proveAES(key []uint8, nonce []uint8, counter uint32, plaint
 		Key: make([]frontend.Variable, len(key)),
 	}
 
-	circuit.Counter = counter
 	for i := 0; i < len(key); i++ {
 		circuit.Key[i] = key[i]
 	}
-	for i := 0; i < len(nonce); i++ {
+	for i := 0; i < len(circuit.Nonce); i++ {
 		circuit.Nonce[i] = nonce[i]
 	}
+	circuit.Counter = counter
 	for i := 0; i < len(plaintext); i++ {
 		circuit.Plaintext[i] = plaintext[i]
 	}
