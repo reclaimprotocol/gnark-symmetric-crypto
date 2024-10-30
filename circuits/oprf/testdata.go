@@ -40,6 +40,44 @@ func PrepareTestData(secretData, domainSeparator string) (*OPRFData, error) {
 	serverPublic := &tbn254.PointAffine{}
 	serverPublic.ScalarMultiplication(&curve.Base, sk) // G*sk
 
+	nodes := 10
+	threshold := 3
+	shares, err := utils.CreateShares(nodes, threshold, sk)
+	if err != nil {
+		return nil, err
+	}
+
+	idxs := utils.PickRandomIndexes(nodes, threshold)
+
+	resps := make([]twistededwards.Point, threshold)
+	sharePublicKeys := make([]twistededwards.Point, threshold)
+	coefficients := make([]frontend.Variable, threshold)
+	cs := make([]frontend.Variable, threshold)
+	rs := make([]frontend.Variable, threshold)
+
+	peers := make([]int, len(idxs))
+	for i := 0; i < len(idxs); i++ {
+		peers[i] = idxs[i] + 1
+	}
+
+	for i := 0; i < threshold; i++ {
+
+		idx := idxs[i]
+
+		var resp *utils.OPRFResponse
+		resp, err = utils.OPRF(shares[idx].PrivateKey, req.MaskedData)
+		if err != nil {
+			return nil, err
+		}
+
+		resps[i] = OutPointToInPoint(resp.Response)
+		sharePublicKeys[i] = OutPointToInPoint(shares[idx].PublicKey)
+		coefficients[i] = utils.Coeff(peers[i], peers)
+		cs[i] = resp.C
+		rs[i] = resp.R
+
+	}
+
 	resp, err := utils.OPRF(sk, req.MaskedData)
 	if err != nil {
 		return nil, err
@@ -50,14 +88,18 @@ func PrepareTestData(secretData, domainSeparator string) (*OPRFData, error) {
 		return nil, err
 	}
 
-	return &OPRFData{
-		Response:        OutPointToInPoint(resp.Response),
+	data := &OPRFData{
 		SecretData:      [2]frontend.Variable{req.SecretElements[0], req.SecretElements[1]},
 		DomainSeparator: new(big.Int).SetBytes([]byte(domainSeparator)),
 		Output:          OutPointToInPoint(out),
 		Mask:            req.Mask,
-		ServerPublicKey: OutPointToInPoint(serverPublic),
-		C:               resp.C,
-		S:               resp.S,
-	}, nil
+	}
+
+	copy(data.Responses[:], resps)
+	copy(data.SharePublicKeys[:], sharePublicKeys)
+	copy(data.Coefficients[:], coefficients)
+	copy(data.C[:], cs)
+	copy(data.R[:], rs)
+
+	return data, nil
 }

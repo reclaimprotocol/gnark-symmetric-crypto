@@ -342,7 +342,7 @@ func TestFullChaCha20OPRF(t *testing.T) {
 			ServerPublicKey: serverPublic.Marshal(),
 			Output:          out.Marshal(),
 			C:               resp.C.Bytes(),
-			S:               resp.S.Bytes(),
+			S:               resp.R.Bytes(),
 		},
 	}
 
@@ -367,7 +367,7 @@ func TestFullChaCha20OPRF(t *testing.T) {
 			ServerPublicKey: serverPublic.Marshal(),
 			Output:          out.Marshal(),
 			C:               resp.C.Bytes(),
-			S:               resp.S.Bytes(),
+			S:               resp.R.Bytes(),
 		},
 	}
 

@@ -90,7 +90,7 @@ func ProcessOPRFResponse(params []byte) []byte {
 	resp := &utils.OPRFResponse{
 		Response: oprfResponse,
 		C:        new(big.Int).SetBytes(inputParams.Response.C),
-		S:        new(big.Int).SetBytes(inputParams.Response.S),
+		R:        new(big.Int).SetBytes(inputParams.Response.S),
 	}
 
 	output, err := utils.ProcessOPRFResponse(serverPublicKey, req, resp)

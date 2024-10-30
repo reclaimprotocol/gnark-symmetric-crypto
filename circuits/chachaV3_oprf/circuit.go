@@ -14,14 +14,18 @@ const Blocks = 2
 const BytesPerElement = 31
 
 type OPRFData struct {
+	DomainSeparator frontend.Variable `gnark:",public"`
 	Mask            frontend.Variable
-	DomainSeparator frontend.Variable    `gnark:",public"`
-	ServerResponse  twistededwards.Point `gnark:",public"`
-	ServerPublicKey twistededwards.Point `gnark:",public"`
-	Output          twistededwards.Point `gnark:",public"` // after this point is hashed it will be the "nullifier"
-	// Proof values of DLEQ that ServerResponse was created with the same private key as server public key
-	C frontend.Variable `gnark:",public"`
-	S frontend.Variable `gnark:",public"`
+
+	Responses    [oprf.Threshold]twistededwards.Point `gnark:",public"` // responses per each node
+	Coefficients [oprf.Threshold]frontend.Variable    `gnark:",public"` // coeffs for reconstructing point & public key
+
+	// Proofs of DLEQ per node
+	SharePublicKeys [oprf.Threshold]twistededwards.Point `gnark:",public"`
+	C               [oprf.Threshold]frontend.Variable    `gnark:",public"`
+	R               [oprf.Threshold]frontend.Variable    `gnark:",public"`
+
+	Output twistededwards.Point `gnark:",public"`
 }
 
 type ChachaOPRFCircuit struct {
@@ -133,11 +137,12 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 		SecretData:      [2]frontend.Variable{res1, res2},
 		DomainSeparator: c.OPRF.DomainSeparator,
 		Mask:            c.OPRF.Mask,
-		Response:        c.OPRF.ServerResponse,
+		Responses:       c.OPRF.Responses,
+		Coefficients:    c.OPRF.Coefficients,
 		Output:          c.OPRF.Output,
-		ServerPublicKey: c.OPRF.ServerPublicKey,
+		SharePublicKeys: c.OPRF.SharePublicKeys,
 		C:               c.OPRF.C,
-		S:               c.OPRF.S,
+		R:               c.OPRF.R,
 	}
 	return oprf.VerifyOPRF(api, oprfData)
 }

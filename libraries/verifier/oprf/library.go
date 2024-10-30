@@ -38,7 +38,7 @@ func OPRF(params []byte) []byte {
 	res, err := json.Marshal(&OutputOPRFParams{
 		Response: resp.Response.Marshal(),
 		C:        resp.C.Bytes(),
-		S:        resp.S.Bytes(),
+		S:        resp.R.Bytes(),
 	})
 	if err != nil {
 		panic(err)

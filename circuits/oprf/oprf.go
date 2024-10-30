@@ -9,16 +9,22 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 )
 
+const Threshold = 3
+
 type OPRFData struct {
 	SecretData      [2]frontend.Variable
-	DomainSeparator frontend.Variable
+	DomainSeparator frontend.Variable `gnark:",public"`
 	Mask            frontend.Variable
-	Response        twistededwards.Point `gnark:",public"`
-	Output          twistededwards.Point `gnark:",public"`
-	// Proof of DLEQ that Response was created with the same private key as server public key
-	ServerPublicKey twistededwards.Point `gnark:",public"`
-	C               frontend.Variable    `gnark:",public"`
-	S               frontend.Variable    `gnark:",public"`
+
+	Responses    [Threshold]twistededwards.Point `gnark:",public"` // responses per each node
+	Coefficients [Threshold]frontend.Variable    `gnark:",public"` // coeffs for reconstructing point & public key
+
+	// Proofs of DLEQ per node
+	SharePublicKeys [Threshold]twistededwards.Point `gnark:",public"`
+	C               [Threshold]frontend.Variable    `gnark:",public"`
+	R               [Threshold]frontend.Variable    `gnark:",public"`
+
+	Output twistededwards.Point `gnark:",public"`
 }
 
 type OPRF struct {
@@ -40,14 +46,7 @@ func VerifyOPRF(api frontend.API, n *OPRFData) error {
 	}
 	helper := NewBabyJubFieldHelper(api)
 
-	curve.AssertIsOnCurve(n.Response)
 	curve.AssertIsOnCurve(n.Output)
-	curve.AssertIsOnCurve(n.ServerPublicKey)
-
-	/*babyModulus := new(BabyJubParams).Modulus()
-	api.AssertIsLessOrEqual(n.Mask, babyModulus)
-	api.AssertIsLessOrEqual(n.InvMask, babyModulus)
-	api.AssertIsLessOrEqual(n.SecretData, babyModulus)*/
 
 	maskBits := bits.ToBinary(api, n.Mask, bits.WithNbDigits(api.Compiler().Field().BitLen()))
 	mask := field.FromBits(maskBits...)
@@ -59,13 +58,21 @@ func VerifyOPRF(api frontend.API, n *OPRFData) error {
 
 	masked := curve.ScalarMul(*dataPoint, n.Mask)
 
-	err = checkDLEQ(api, curve, masked, n.Response, n.ServerPublicKey, n.C, n.S)
-	if err != nil {
-		return err
+	// verify each DLEQ first
+
+	for i := 0; i < Threshold; i++ {
+		curve.AssertIsOnCurve(n.Responses[i])
+		curve.AssertIsOnCurve(n.SharePublicKeys[i])
+		err = checkDLEQ(api, curve, masked, n.Responses[i], n.SharePublicKeys[i], n.C[i], n.R[i])
+		if err != nil {
+			return err
+		}
 	}
 
+	response := TOPRFMult(curve, n.Responses[:], n.Coefficients[:])
+
 	invMask := helper.packScalarToVar(field.Inverse(mask))
-	unMasked := curve.ScalarMul(n.Response, invMask)
+	unMasked := curve.ScalarMul(response, invMask)
 
 	api.AssertIsEqual(n.Output.X, unMasked.X)
 	api.AssertIsEqual(n.Output.Y, unMasked.Y)
@@ -73,7 +80,22 @@ func VerifyOPRF(api frontend.API, n *OPRFData) error {
 	return nil
 }
 
-func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, ServerPublicKey twistededwards.Point, challenge, r frontend.Variable) error {
+func TOPRFMult(curve twistededwards.Curve, points []twistededwards.Point, coeffs []frontend.Variable) twistededwards.Point {
+	result := twistededwards.Point{
+		X: 0,
+		Y: 1,
+	}
+
+	for i := 0; i < len(points); i++ {
+		lPoly := coeffs[i]
+		gki := curve.ScalarMul(points[i], lPoly)
+		result = curve.Add(result, gki)
+	}
+	return result
+
+}
+
+func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, serverPublicKey twistededwards.Point, challenge, r frontend.Variable) error {
 	hField, err := mimc.NewMiMC(api)
 	if err != nil {
 		return err
@@ -85,7 +107,7 @@ func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, S
 	}
 
 	rG := curve.ScalarMul(basePoint, r)
-	chG := curve.ScalarMul(ServerPublicKey, challenge)
+	chG := curve.ScalarMul(serverPublicKey, challenge)
 	t1 := curve.Add(rG, chG)
 
 	rH := curve.ScalarMul(masked, r)
@@ -95,8 +117,8 @@ func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, S
 	hField.Write(basePoint.X)
 	hField.Write(basePoint.Y)
 
-	hField.Write(ServerPublicKey.X)
-	hField.Write(ServerPublicKey.Y)
+	hField.Write(serverPublicKey.X)
+	hField.Write(serverPublicKey.Y)
 
 	hField.Write(t1.X)
 	hField.Write(t1.Y)

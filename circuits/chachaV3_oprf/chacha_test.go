@@ -181,11 +181,12 @@ func createWitness(d *oprf.OPRFData, bKey []uint8, bNonce []uint8, counter int, 
 		OPRF: OPRFData{
 			Mask:            d.Mask,
 			DomainSeparator: d.DomainSeparator,
-			ServerResponse:  d.Response,
+			Responses:       d.Responses,
+			Coefficients:    d.Coefficients,
 			Output:          d.Output,
-			ServerPublicKey: d.ServerPublicKey,
+			SharePublicKeys: d.SharePublicKeys,
 			C:               d.C,
-			S:               d.S,
+			R:               d.R,
 		},
 	}
 
