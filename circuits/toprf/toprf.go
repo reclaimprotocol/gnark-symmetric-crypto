@@ -11,7 +11,7 @@ import (
 
 const Threshold = 2
 
-type OPRFData struct {
+type TOPRFParams struct {
 	SecretData      [2]frontend.Variable
 	DomainSeparator frontend.Variable `gnark:",public"`
 	Mask            frontend.Variable
@@ -27,15 +27,15 @@ type OPRFData struct {
 	Output twistededwards.Point `gnark:",public"`
 }
 
-type OPRF struct {
-	*OPRFData
+type TOPRF struct {
+	*TOPRFParams
 }
 
-func (n *OPRF) Define(api frontend.API) error {
-	return VerifyOPRF(api, n.OPRFData)
+func (n *TOPRF) Define(api frontend.API) error {
+	return VerifyTOPRF(api, n.TOPRFParams)
 }
 
-func VerifyOPRF(api frontend.API, n *OPRFData) error {
+func VerifyTOPRF(api frontend.API, n *TOPRFParams) error {
 	curve, err := twistededwards.NewEdCurve(api, tbn.BN254)
 	if err != nil {
 		return err

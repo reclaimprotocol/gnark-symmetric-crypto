@@ -132,8 +132,8 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 	comparator.AssertIsLessEq(totalBits, BytesPerElement*8*2)                                                   // check that number of processed bits <= 62 bytes
 	api.AssertIsEqual(totalBits, api.Mul(c.Len, 8))                                                             // and that it corresponds to Len
 
-	// check that OPRF output was created from secret data by a server with a specific public key
-	oprfData := &toprf.OPRFData{
+	// check that TOPRF output was created from secret data by a server with a specific public key
+	oprfData := &toprf.TOPRFParams{
 		SecretData:      [2]frontend.Variable{res1, res2},
 		DomainSeparator: c.OPRF.DomainSeparator,
 		Mask:            c.OPRF.Mask,
@@ -144,5 +144,5 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 		C:               c.OPRF.C,
 		R:               c.OPRF.R,
 	}
-	return toprf.VerifyOPRF(api, oprfData)
+	return toprf.VerifyTOPRF(api, oprfData)
 }

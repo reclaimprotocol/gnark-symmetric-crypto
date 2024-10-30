@@ -12,13 +12,13 @@ import (
 	"github.com/consensys/gnark/test"
 )
 
-func TestOPRF(t *testing.T) {
+func TestTOPRF(t *testing.T) {
 	assert := test.NewAssert(t)
-	testData, err := utils.PrepareTestData("randomiiiiiiiiiiiiiizerrandomiiiiiiiiiiiiiizerrandomiiiiiiiiir", "")
+	testData, err := PrepareTestData("randomiiiiiiiiiiiiiizerrandomiiiiiiiiiiiiiizerrandomiiiiiiiiir", "")
 	assert.NoError(err)
 
-	circuit := OPRF{
-		OPRFData: testData,
+	circuit := TOPRF{
+		TOPRFParams: testData,
 	}
 
 	assert.CheckCircuit(&circuit, test.WithCurves(ecc.BN254), test.WithValidAssignment(&circuit))

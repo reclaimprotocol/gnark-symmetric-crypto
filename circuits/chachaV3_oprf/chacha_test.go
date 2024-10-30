@@ -146,7 +146,7 @@ func TestCipher(t *testing.T) {
 	cipher.SetCounter(uint32(counter))
 	cipher.XORKeyStream(ciphertext, plaintext)
 
-	d, err := utils.PrepareTestData(secretStr, "reclaim")
+	d, err := toprf.PrepareTestData(secretStr, "reclaim")
 	assert.NoError(err)
 
 	witness := createWitness(d, bKey, bNonce, counter, ciphertext, plaintext, pos, len(secretBytes))
@@ -175,7 +175,7 @@ func TestCipher(t *testing.T) {
 	assert.NoError(err)
 }
 
-func createWitness(d *toprf.OPRFData, bKey []uint8, bNonce []uint8, counter int, ciphertext []byte, plaintext []byte, pos, len int) ChachaOPRFCircuit {
+func createWitness(d *toprf.TOPRFParams, bKey []uint8, bNonce []uint8, counter int, ciphertext []byte, plaintext []byte, pos, len int) ChachaOPRFCircuit {
 	witness := ChachaOPRFCircuit{
 		Len: len,
 		OPRF: OPRFData{
