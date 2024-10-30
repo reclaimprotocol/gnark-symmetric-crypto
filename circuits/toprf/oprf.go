@@ -9,7 +9,7 @@ import (
 	"github.com/consensys/gnark/std/math/emulated"
 )
 
-const Threshold = 3
+const Threshold = 2
 
 type OPRFData struct {
 	SecretData      [2]frontend.Variable

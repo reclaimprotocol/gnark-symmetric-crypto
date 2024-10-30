@@ -2,6 +2,7 @@ package toprf
 
 import (
 	"crypto/rand"
+	"gnark-symmetric-crypto/utils"
 	"math/big"
 	"testing"
 
@@ -13,7 +14,7 @@ import (
 
 func TestOPRF(t *testing.T) {
 	assert := test.NewAssert(t)
-	testData, err := PrepareTestData("randomiiiiiiiiiiiiiizerrandomiiiiiiiiiiiiiizerrandomiiiiiiiiir", "")
+	testData, err := utils.PrepareTestData("randomiiiiiiiiiiiiiizerrandomiiiiiiiiiiiiiizerrandomiiiiiiiiir", "")
 	assert.NoError(err)
 
 	circuit := OPRF{
@@ -31,14 +32,14 @@ func TestMaskUnmask(t *testing.T) {
 	data.ScalarMultiplication(&base, big.NewInt(12345)) // just dummy data
 
 	// random scalar
-	r, err := rand.Int(rand.Reader, TNBCurveOrder)
+	r, err := rand.Int(rand.Reader, utils.TNBCurveOrder)
 	assert.NoError(err)
 
 	blinded := &tbn254.PointAffine{}
 	blinded.ScalarMultiplication(data, r)
 
 	invR := &big.Int{}
-	invR.ModInverse(r, TNBCurveOrder)
+	invR.ModInverse(r, utils.TNBCurveOrder)
 	deblinded := &tbn254.PointAffine{}
 	deblinded.ScalarMultiplication(blinded, invR)
 	assert.True(deblinded.Equal(data))

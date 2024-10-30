@@ -1,16 +1,14 @@
-package toprf
+package utils
 
 import (
 	"crypto/rand"
-	"gnark-symmetric-crypto/utils"
+	"gnark-symmetric-crypto/circuits/toprf"
 	"math/big"
 
 	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 )
-
-var TNBCurveOrder = func() *big.Int { order := tbn254.GetEdwardsCurve().Order; return &order }()
 
 type Proof struct {
 	ServerPublicKey twistededwards.Point
@@ -27,9 +25,9 @@ type TestData struct {
 	Proof      *Proof
 }
 
-func PrepareTestData(secretData, domainSeparator string) (*OPRFData, error) {
+func PrepareTestData(secretData, domainSeparator string) (*toprf.OPRFData, error) {
 
-	req, err := utils.OPRFGenerateRequest(secretData, domainSeparator)
+	req, err := OPRFGenerateRequest(secretData, domainSeparator)
 	if err != nil {
 		return nil, err
 	}
@@ -40,14 +38,15 @@ func PrepareTestData(secretData, domainSeparator string) (*OPRFData, error) {
 	serverPublic := &tbn254.PointAffine{}
 	serverPublic.ScalarMultiplication(&curve.Base, sk) // G*sk
 
-	nodes := 10
-	threshold := 3
-	shares, err := utils.CreateShares(nodes, threshold, sk)
+	threshold := toprf.Threshold
+	nodes := threshold + 2
+
+	shares, err := CreateShares(nodes, threshold, sk)
 	if err != nil {
 		return nil, err
 	}
 
-	idxs := utils.PickRandomIndexes(nodes, threshold)
+	idxs := PickRandomIndexes(nodes, threshold)
 
 	resps := make([]twistededwards.Point, threshold)
 	sharePublicKeys := make([]twistededwards.Point, threshold)
@@ -64,34 +63,34 @@ func PrepareTestData(secretData, domainSeparator string) (*OPRFData, error) {
 
 		idx := idxs[i]
 
-		var resp *utils.OPRFResponse
-		resp, err = utils.OPRFEvaluate(shares[idx].PrivateKey, req.MaskedData)
+		var resp *OPRFResponse
+		resp, err = OPRFEvaluate(shares[idx].PrivateKey, req.MaskedData)
 		if err != nil {
 			return nil, err
 		}
 
-		resps[i] = utils.OutPointToInPoint(resp.Response)
-		sharePublicKeys[i] = utils.OutPointToInPoint(shares[idx].PublicKey)
-		coefficients[i] = utils.Coeff(peers[i], peers)
+		resps[i] = OutPointToInPoint(resp.Response)
+		sharePublicKeys[i] = OutPointToInPoint(shares[idx].PublicKey)
+		coefficients[i] = Coeff(peers[i], peers)
 		cs[i] = resp.C
 		rs[i] = resp.R
 
 	}
 
-	resp, err := utils.OPRFEvaluate(sk, req.MaskedData)
+	resp, err := OPRFEvaluate(sk, req.MaskedData)
 	if err != nil {
 		return nil, err
 	}
 
-	out, err := utils.OPRFFinalize(serverPublic, req, resp)
+	out, err := OPRFFinalize(serverPublic, req, resp)
 	if err != nil {
 		return nil, err
 	}
 
-	data := &OPRFData{
+	data := &toprf.OPRFData{
 		SecretData:      [2]frontend.Variable{req.SecretElements[0], req.SecretElements[1]},
 		DomainSeparator: new(big.Int).SetBytes([]byte(domainSeparator)),
-		Output:          utils.OutPointToInPoint(out),
+		Output:          OutPointToInPoint(out),
 		Mask:            req.Mask,
 	}
 

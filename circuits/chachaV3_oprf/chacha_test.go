@@ -146,7 +146,7 @@ func TestCipher(t *testing.T) {
 	cipher.SetCounter(uint32(counter))
 	cipher.XORKeyStream(ciphertext, plaintext)
 
-	d, err := toprf.PrepareTestData(secretStr, "reclaim")
+	d, err := utils.PrepareTestData(secretStr, "reclaim")
 	assert.NoError(err)
 
 	witness := createWitness(d, bKey, bNonce, counter, ciphertext, plaintext, pos, len(secretBytes))

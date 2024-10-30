@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
-	"gnark-symmetric-crypto/circuits/toprf"
 	prover "gnark-symmetric-crypto/libraries/prover/impl"
 	verifier "gnark-symmetric-crypto/libraries/verifier/impl"
 	"gnark-symmetric-crypto/utils"
@@ -316,7 +315,7 @@ func TestFullChaCha20OPRF(t *testing.T) {
 
 	curve := tbn254.GetEdwardsCurve()
 	// server secret & public
-	sk, _ := rand.Int(rand.Reader, toprf.TNBCurveOrder)
+	sk, _ := rand.Int(rand.Reader, utils.TNBCurveOrder)
 	serverPublic := &tbn254.PointAffine{}
 	serverPublic.ScalarMultiplication(&curve.Base, sk) // G*sk
 
