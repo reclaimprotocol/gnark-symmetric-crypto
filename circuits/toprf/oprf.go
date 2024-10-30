@@ -1,4 +1,4 @@
-package oprf
+package toprf
 
 import (
 	tbn "github.com/consensys/gnark-crypto/ecc/twistededwards"

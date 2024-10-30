@@ -30,7 +30,7 @@ func OPRF(params []byte) []byte {
 	if err != nil {
 		panic(err)
 	}
-	resp, err := utils.OPRF(new(big.Int).SetBytes(inputParams.ServerPrivate), maskedData)
+	resp, err := utils.OPRFEvaluate(new(big.Int).SetBytes(inputParams.ServerPrivate), maskedData)
 	if err != nil {
 		panic(err)
 	}

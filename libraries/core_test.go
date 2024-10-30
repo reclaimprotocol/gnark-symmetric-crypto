@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
-	"gnark-symmetric-crypto/circuits/oprf"
+	"gnark-symmetric-crypto/circuits/toprf"
 	prover "gnark-symmetric-crypto/libraries/prover/impl"
 	verifier "gnark-symmetric-crypto/libraries/verifier/impl"
 	"gnark-symmetric-crypto/utils"
@@ -311,20 +311,20 @@ func TestFullChaCha20OPRF(t *testing.T) {
 	cipher.SetCounter(counter)
 	cipher.XORKeyStream(bInput, bOutput)
 
-	req, err := utils.GenerateOPRFRequest(email, domainSeparator)
+	req, err := utils.OPRFGenerateRequest(email, domainSeparator)
 	assert.NoError(err)
 
 	curve := tbn254.GetEdwardsCurve()
 	// server secret & public
-	sk, _ := rand.Int(rand.Reader, oprf.TNBCurveOrder)
+	sk, _ := rand.Int(rand.Reader, toprf.TNBCurveOrder)
 	serverPublic := &tbn254.PointAffine{}
 	serverPublic.ScalarMultiplication(&curve.Base, sk) // G*sk
 
 	// server part
-	resp, err := utils.OPRF(sk, req.MaskedData)
+	resp, err := utils.OPRFEvaluate(sk, req.MaskedData)
 	assert.NoError(err)
 
-	out, err := utils.ProcessOPRFResponse(serverPublic, req, resp)
+	out, err := utils.OPRFFinalize(serverPublic, req, resp)
 	assert.NoError(err)
 
 	inputParams := &prover.InputParams{

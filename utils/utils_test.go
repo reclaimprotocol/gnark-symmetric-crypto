@@ -24,13 +24,13 @@ func TestOPRF(t *testing.T) {
 	email := "test@example.com"
 	ds := "reclaim"
 
-	req, err := GenerateOPRFRequest(email, ds)
+	req, err := OPRFGenerateRequest(email, ds)
 	require.NoError(t, err)
 
-	resp, err := OPRF(sk, req.MaskedData)
+	resp, err := OPRFEvaluate(sk, req.MaskedData)
 	require.NoError(t, err)
 
-	res, err := ProcessOPRFResponse(serverPublic, req, resp)
+	res, err := OPRFFinalize(serverPublic, req, resp)
 	require.NoError(t, err)
 
 	require.Equal(t, "jH6BFWtyH0HQGJCJ+vM9eIkBdXrLypeAOSmwz2UtxYs=", base64.StdEncoding.EncodeToString(res.Marshal()))
@@ -41,7 +41,7 @@ func TestOPRF(t *testing.T) {
 	require.NoError(t, err)
 	resps := make([]*tbn254.PointAffine, threshold)
 	for i := 0; i < threshold; i++ {
-		resp, err = OPRF(shares[i].PrivateKey, req.MaskedData)
+		resp, err = OPRFEvaluate(shares[i].PrivateKey, req.MaskedData)
 		require.NoError(t, err)
 		resps[i] = resp.Response
 	}

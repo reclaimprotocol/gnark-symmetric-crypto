@@ -24,7 +24,7 @@ func GenerateOPRFRequestData(params []byte) []byte {
 		panic(err)
 	}
 
-	req, err := utils.GenerateOPRFRequest(inputParams.Data, inputParams.DomainSeparator)
+	req, err := utils.OPRFGenerateRequest(inputParams.Data, inputParams.DomainSeparator)
 	if err != nil {
 		panic(err)
 	}
@@ -93,7 +93,7 @@ func ProcessOPRFResponse(params []byte) []byte {
 		R:        new(big.Int).SetBytes(inputParams.Response.S),
 	}
 
-	output, err := utils.ProcessOPRFResponse(serverPublicKey, req, resp)
+	output, err := utils.OPRFFinalize(serverPublicKey, req, resp)
 	if err != nil {
 		panic(err)
 	}

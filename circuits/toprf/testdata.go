@@ -1,4 +1,4 @@
-package oprf
+package toprf
 
 import (
 	"crypto/rand"
@@ -29,7 +29,7 @@ type TestData struct {
 
 func PrepareTestData(secretData, domainSeparator string) (*OPRFData, error) {
 
-	req, err := utils.GenerateOPRFRequest(secretData, domainSeparator)
+	req, err := utils.OPRFGenerateRequest(secretData, domainSeparator)
 	if err != nil {
 		return nil, err
 	}
@@ -65,25 +65,25 @@ func PrepareTestData(secretData, domainSeparator string) (*OPRFData, error) {
 		idx := idxs[i]
 
 		var resp *utils.OPRFResponse
-		resp, err = utils.OPRF(shares[idx].PrivateKey, req.MaskedData)
+		resp, err = utils.OPRFEvaluate(shares[idx].PrivateKey, req.MaskedData)
 		if err != nil {
 			return nil, err
 		}
 
-		resps[i] = OutPointToInPoint(resp.Response)
-		sharePublicKeys[i] = OutPointToInPoint(shares[idx].PublicKey)
+		resps[i] = utils.OutPointToInPoint(resp.Response)
+		sharePublicKeys[i] = utils.OutPointToInPoint(shares[idx].PublicKey)
 		coefficients[i] = utils.Coeff(peers[i], peers)
 		cs[i] = resp.C
 		rs[i] = resp.R
 
 	}
 
-	resp, err := utils.OPRF(sk, req.MaskedData)
+	resp, err := utils.OPRFEvaluate(sk, req.MaskedData)
 	if err != nil {
 		return nil, err
 	}
 
-	out, err := utils.ProcessOPRFResponse(serverPublic, req, resp)
+	out, err := utils.OPRFFinalize(serverPublic, req, resp)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func PrepareTestData(secretData, domainSeparator string) (*OPRFData, error) {
 	data := &OPRFData{
 		SecretData:      [2]frontend.Variable{req.SecretElements[0], req.SecretElements[1]},
 		DomainSeparator: new(big.Int).SetBytes([]byte(domainSeparator)),
-		Output:          OutPointToInPoint(out),
+		Output:          utils.OutPointToInPoint(out),
 		Mask:            req.Mask,
 	}
 

@@ -1,7 +1,7 @@
 package chachaV3_oprf
 
 import (
-	"gnark-symmetric-crypto/circuits/oprf"
+	"gnark-symmetric-crypto/circuits/toprf"
 	"math/big"
 
 	"github.com/consensys/gnark/frontend"
@@ -17,13 +17,13 @@ type OPRFData struct {
 	DomainSeparator frontend.Variable `gnark:",public"`
 	Mask            frontend.Variable
 
-	Responses    [oprf.Threshold]twistededwards.Point `gnark:",public"` // responses per each node
-	Coefficients [oprf.Threshold]frontend.Variable    `gnark:",public"` // coeffs for reconstructing point & public key
+	Responses    [toprf.Threshold]twistededwards.Point `gnark:",public"` // responses per each node
+	Coefficients [toprf.Threshold]frontend.Variable    `gnark:",public"` // coeffs for reconstructing point & public key
 
 	// Proofs of DLEQ per node
-	SharePublicKeys [oprf.Threshold]twistededwards.Point `gnark:",public"`
-	C               [oprf.Threshold]frontend.Variable    `gnark:",public"`
-	R               [oprf.Threshold]frontend.Variable    `gnark:",public"`
+	SharePublicKeys [toprf.Threshold]twistededwards.Point `gnark:",public"`
+	C               [toprf.Threshold]frontend.Variable    `gnark:",public"`
+	R               [toprf.Threshold]frontend.Variable    `gnark:",public"`
 
 	Output twistededwards.Point `gnark:",public"`
 }
@@ -133,7 +133,7 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 	api.AssertIsEqual(totalBits, api.Mul(c.Len, 8))                                                             // and that it corresponds to Len
 
 	// check that OPRF output was created from secret data by a server with a specific public key
-	oprfData := &oprf.OPRFData{
+	oprfData := &toprf.OPRFData{
 		SecretData:      [2]frontend.Variable{res1, res2},
 		DomainSeparator: c.OPRF.DomainSeparator,
 		Mask:            c.OPRF.Mask,
@@ -144,5 +144,5 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 		C:               c.OPRF.C,
 		R:               c.OPRF.R,
 	}
-	return oprf.VerifyOPRF(api, oprfData)
+	return toprf.VerifyOPRF(api, oprfData)
 }

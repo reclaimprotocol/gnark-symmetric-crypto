@@ -1,4 +1,4 @@
-package oprf
+package toprf
 
 import (
 	"math/big"
