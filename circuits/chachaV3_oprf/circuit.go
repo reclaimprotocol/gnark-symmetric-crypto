@@ -13,36 +13,36 @@ import (
 const Blocks = 2
 const BytesPerElement = 31
 
-type OPRFData struct {
+type TOPRFData struct {
 	DomainSeparator frontend.Variable `gnark:",public"`
 	Mask            frontend.Variable
 
-	Responses    [toprf.Threshold]twistededwards.Point `gnark:",public"` // responses per each node
-	Coefficients [toprf.Threshold]frontend.Variable    `gnark:",public"` // coeffs for reconstructing point & public key
+	EvaluatedElements [toprf.Threshold]twistededwards.Point `gnark:",public"` // responses per each node
+	Coefficients      [toprf.Threshold]frontend.Variable    `gnark:",public"` // coeffs for reconstructing element
 
 	// Proofs of DLEQ per node
-	SharePublicKeys [toprf.Threshold]twistededwards.Point `gnark:",public"`
-	C               [toprf.Threshold]frontend.Variable    `gnark:",public"`
-	R               [toprf.Threshold]frontend.Variable    `gnark:",public"`
+	PublicKeys [toprf.Threshold]twistededwards.Point `gnark:",public"`
+	C          [toprf.Threshold]frontend.Variable    `gnark:",public"`
+	R          [toprf.Threshold]frontend.Variable    `gnark:",public"`
 
 	Output twistededwards.Point `gnark:",public"`
 }
 
-type ChachaOPRFCircuit struct {
+type ChachaTOPRFCircuit struct {
 	Key     [8][BITS_PER_WORD]frontend.Variable
 	Counter [BITS_PER_WORD]frontend.Variable               `gnark:",public"`
 	Nonce   [3][BITS_PER_WORD]frontend.Variable            `gnark:",public"`
 	In      [16 * Blocks][BITS_PER_WORD]frontend.Variable  `gnark:",public"` // ciphertext
 	Out     [16 * Blocks][BITS_PER_WORD]frontend.Variable  // plaintext
-	BitMask [16 * Blocks * BITS_PER_WORD]frontend.Variable `gnark:",public"` // bit mask for bits being hashed
+	Bitmask [16 * Blocks * BITS_PER_WORD]frontend.Variable `gnark:",public"` // bit mask for bits being hashed
 
 	// Length of "secret data" elements to be hashed. In bytes
 	Len frontend.Variable `gnark:",public"`
 
-	OPRF OPRFData
+	TOPRF TOPRFData
 }
 
-func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
+func (c *ChachaTOPRFCircuit) Define(api frontend.API) error {
 	outBits := make([]frontend.Variable, 16*Blocks*BITS_PER_WORD)
 	var state [16][BITS_PER_WORD]frontend.Variable
 	counter := c.Counter
@@ -108,7 +108,7 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 
 	for i := 0; i < 16*Blocks*BITS_PER_WORD; i++ {
 		bitIndex := i
-		bitIsSet := c.BitMask[bitIndex]
+		bitIsSet := c.Bitmask[bitIndex]
 		bit := api.Select(bitIsSet, outBits[bitIndex], 0)
 
 		res1 = api.Add(res1, api.Mul(bit, pow1))
@@ -135,14 +135,14 @@ func (c *ChachaOPRFCircuit) Define(api frontend.API) error {
 	// check that TOPRF output was created from secret data by a server with a specific public key
 	oprfData := &toprf.TOPRFParams{
 		SecretData:      [2]frontend.Variable{res1, res2},
-		DomainSeparator: c.OPRF.DomainSeparator,
-		Mask:            c.OPRF.Mask,
-		Responses:       c.OPRF.Responses,
-		Coefficients:    c.OPRF.Coefficients,
-		Output:          c.OPRF.Output,
-		SharePublicKeys: c.OPRF.SharePublicKeys,
-		C:               c.OPRF.C,
-		R:               c.OPRF.R,
+		DomainSeparator: c.TOPRF.DomainSeparator,
+		Mask:            c.TOPRF.Mask,
+		Responses:       c.TOPRF.EvaluatedElements,
+		Coefficients:    c.TOPRF.Coefficients,
+		Output:          c.TOPRF.Output,
+		SharePublicKeys: c.TOPRF.PublicKeys,
+		C:               c.TOPRF.C,
+		R:               c.TOPRF.R,
 	}
 	return toprf.VerifyTOPRF(api, oprfData)
 }

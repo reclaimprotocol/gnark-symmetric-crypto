@@ -155,7 +155,7 @@ func TestCipher(t *testing.T) {
 	assert.NoError(err)
 	assert.CheckCircuit(&witness, test.WithValidAssignment(&witness), test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254))
 
-	cs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &ChachaOPRFCircuit{})
+	cs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &ChachaTOPRFCircuit{})
 	assert.NoError(err)
 	fmt.Println(cs.GetNbConstraints(), cs.GetNbPublicVariables(), cs.GetNbSecretVariables())
 
@@ -175,18 +175,18 @@ func TestCipher(t *testing.T) {
 	assert.NoError(err)
 }
 
-func createWitness(d *toprf.TOPRFParams, bKey []uint8, bNonce []uint8, counter int, ciphertext []byte, plaintext []byte, pos, len int) ChachaOPRFCircuit {
-	witness := ChachaOPRFCircuit{
+func createWitness(d *toprf.TOPRFParams, bKey []uint8, bNonce []uint8, counter int, ciphertext []byte, plaintext []byte, pos, len int) ChachaTOPRFCircuit {
+	witness := ChachaTOPRFCircuit{
 		Len: len,
-		OPRF: OPRFData{
-			Mask:            d.Mask,
-			DomainSeparator: d.DomainSeparator,
-			Responses:       d.Responses,
-			Coefficients:    d.Coefficients,
-			Output:          d.Output,
-			SharePublicKeys: d.SharePublicKeys,
-			C:               d.C,
-			R:               d.R,
+		TOPRF: TOPRFData{
+			Mask:              d.Mask,
+			DomainSeparator:   d.DomainSeparator,
+			EvaluatedElements: d.Responses,
+			Coefficients:      d.Coefficients,
+			Output:            d.Output,
+			PublicKeys:        d.SharePublicKeys,
+			C:                 d.C,
+			R:                 d.R,
 		},
 	}
 
@@ -195,6 +195,6 @@ func createWitness(d *toprf.TOPRFParams, bKey []uint8, bNonce []uint8, counter i
 	witness.Counter = utils.Uint32ToBits(counter)
 	copy(witness.In[:], utils.BytesToUint32BEBits(ciphertext))
 	copy(witness.Out[:], utils.BytesToUint32BEBits(plaintext))
-	utils.SetBitmask(witness.BitMask[:], uint32(pos), uint32(len))
+	utils.SetBitmask(witness.Bitmask[:], uint32(pos), uint32(len))
 	return witness
 }

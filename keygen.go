@@ -16,7 +16,7 @@ import (
 func main() {
 
 	// generateCircuitFiles(&chachaV3.ChaChaCircuit{}, "chacha20")
-	generateCircuitFiles(&chachaV3_oprf.ChachaOPRFCircuit{OPRF: chachaV3_oprf.OPRFData{}}, "chacha20_oprf")
+	generateCircuitFiles(&chachaV3_oprf.ChachaTOPRFCircuit{TOPRF: chachaV3_oprf.TOPRFData{}}, "chacha20_oprf")
 
 	/*aes128 := &aesv2.AES128Wrapper{
 		AESWrapper: aesv2.AESWrapper{

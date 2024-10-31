@@ -6,6 +6,9 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
+	"gnark-symmetric-crypto/circuits/chachaV3"
+	"gnark-symmetric-crypto/circuits/chachaV3_oprf"
+	"gnark-symmetric-crypto/circuits/toprf"
 	"gnark-symmetric-crypto/utils"
 	"log"
 	"math/big"
@@ -22,11 +25,7 @@ func init() {
 	// std.RegisterHints()
 }
 
-const BITS_PER_WORD = 32
-const BLOCKS = 1
 const AES_BLOCKS = 4
-const CHACHA_OPRF_BLOCKS = 2
-const Threshold = 2
 
 type TOPRFResponse struct {
 	Index     uint8   `json:"index"`
@@ -54,18 +53,6 @@ type InputParams struct {
 	TOPRF   *TOPRFParams `json:"toprf,omitempty"`
 }
 
-type ChaChaCircuit struct {
-	Key     [8][BITS_PER_WORD]frontend.Variable
-	Counter [BITS_PER_WORD]frontend.Variable              `gnark:",public"`
-	Nonce   [3][BITS_PER_WORD]frontend.Variable           `gnark:",public"`
-	In      [16 * BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
-	Out     [16 * BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"`
-}
-
-func (c *ChaChaCircuit) Define(_ frontend.API) error {
-	return nil
-}
-
 type AESWrapper struct {
 	Key     []frontend.Variable
 	Nonce   [12]frontend.Variable              `gnark:",public"`
@@ -75,39 +62,6 @@ type AESWrapper struct {
 }
 
 func (circuit *AESWrapper) Define(_ frontend.API) error {
-	return nil
-}
-
-type OPRFData struct {
-	DomainSeparator frontend.Variable `gnark:",public"`
-	Mask            frontend.Variable
-
-	Responses    [Threshold]twistededwards.Point `gnark:",public"` // responses per each node
-	Coefficients [Threshold]frontend.Variable    `gnark:",public"` // coeffs for reconstructing point & public key
-
-	// Proofs of DLEQ per node
-	SharePublicKeys [Threshold]twistededwards.Point `gnark:",public"`
-	C               [Threshold]frontend.Variable    `gnark:",public"`
-	R               [Threshold]frontend.Variable    `gnark:",public"`
-
-	Output twistededwards.Point `gnark:",public"`
-}
-
-type ChachaOPRFCircuit struct {
-	Key     [8][BITS_PER_WORD]frontend.Variable
-	Counter [BITS_PER_WORD]frontend.Variable                           `gnark:",public"`
-	Nonce   [3][BITS_PER_WORD]frontend.Variable                        `gnark:",public"`
-	In      [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable  `gnark:",public"` // ciphertext
-	Out     [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable  // plaintext
-	BitMask [16 * CHACHA_OPRF_BLOCKS * BITS_PER_WORD]frontend.Variable `gnark:",public"` // bit mask for bits being hashed
-
-	// Length of "secret data" elements to be hashed. In bytes
-	Len frontend.Variable `gnark:",public"`
-
-	OPRF OPRFData
-}
-
-func (circuit *ChachaOPRFCircuit) Define(_ frontend.API) error {
 	return nil
 }
 
@@ -166,7 +120,7 @@ func (cp *ChaChaProver) Prove(params *InputParams) (proof []byte, output []uint8
 	bNonce := utils.BytesToUint32LEBits(nonce)
 	bCounter := utils.Uint32ToBits(counter)
 
-	witness := &ChaChaCircuit{}
+	witness := &chachaV3.ChaChaCircuit{}
 
 	copy(witness.Key[:], bKey)
 	copy(witness.Nonce[:], bNonce)
@@ -276,7 +230,7 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 	if len(nonce) != 12 {
 		log.Panicf("nonce length must be 12: %d", len(nonce))
 	}
-	if len(input) != CHACHA_OPRF_BLOCKS*64 {
+	if len(input) != chachaV3_oprf.Blocks*64 {
 		log.Panicf("input length must be 64: %d", len(input))
 	}
 
@@ -303,13 +257,13 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 	bNonce := utils.BytesToUint32LEBits(nonce)
 	bCounter := utils.Uint32ToBits(counter)
 
-	var resps [Threshold]twistededwards.Point
-	var coeffs [Threshold]frontend.Variable
-	var pubKeys [Threshold]twistededwards.Point
-	var cs [Threshold]frontend.Variable
-	var rs [Threshold]frontend.Variable
-	idxs := make([]int, Threshold)
-	for i := 0; i < Threshold; i++ {
+	var resps [toprf.Threshold]twistededwards.Point
+	var coeffs [toprf.Threshold]frontend.Variable
+	var pubKeys [toprf.Threshold]twistededwards.Point
+	var cs [toprf.Threshold]frontend.Variable
+	var rs [toprf.Threshold]frontend.Variable
+	idxs := make([]int, toprf.Threshold)
+	for i := 0; i < toprf.Threshold; i++ {
 		r := oprf.Responses[i]
 		idxs[i] = int(r.Index)
 		resps[i] = utils.UnmarshalTBNPoint(r.Evaluated)
@@ -318,20 +272,20 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 		rs[i] = new(big.Int).SetBytes(r.R)
 	}
 
-	for i := 0; i < Threshold; i++ {
+	for i := 0; i < toprf.Threshold; i++ {
 		coeffs[i] = utils.Coeff(idxs[i], idxs)
 	}
 
-	witness := &ChachaOPRFCircuit{
-		OPRF: OPRFData{
-			DomainSeparator: new(big.Int).SetBytes(oprf.DomainSeparator),
-			Mask:            new(big.Int).SetBytes(oprf.Mask),
-			Output:          utils.UnmarshalPoint(oprf.Output),
-			Responses:       resps,
-			Coefficients:    coeffs,
-			SharePublicKeys: pubKeys,
-			C:               cs,
-			R:               rs,
+	witness := &chachaV3_oprf.ChachaTOPRFCircuit{
+		TOPRF: chachaV3_oprf.TOPRFData{
+			DomainSeparator:   new(big.Int).SetBytes(oprf.DomainSeparator),
+			Mask:              new(big.Int).SetBytes(oprf.Mask),
+			Output:            utils.UnmarshalPoint(oprf.Output),
+			EvaluatedElements: resps,
+			Coefficients:      coeffs,
+			PublicKeys:        pubKeys,
+			C:                 cs,
+			R:                 rs,
 		},
 	}
 
@@ -341,7 +295,7 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 	copy(witness.In[:], bInput)
 	copy(witness.Out[:], bOutput)
 
-	utils.SetBitmask(witness.BitMask[:], oprf.Pos, oprf.Len)
+	utils.SetBitmask(witness.Bitmask[:], oprf.Pos, oprf.Len)
 	witness.Len = oprf.Len
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField())
