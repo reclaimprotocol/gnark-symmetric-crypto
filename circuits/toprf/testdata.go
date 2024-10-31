@@ -41,7 +41,7 @@ func PrepareTestData(secretData, domainSeparator string) (*TOPRFParams, error) {
 	threshold := Threshold
 	nodes := threshold + 2
 
-	shares, err := utils.CreateShares(nodes, threshold, sk)
+	shares, err := utils.TOPRFCreateShares(nodes, threshold, sk)
 	if err != nil {
 		return nil, err
 	}
@@ -53,11 +53,6 @@ func PrepareTestData(secretData, domainSeparator string) (*TOPRFParams, error) {
 	coefficients := make([]frontend.Variable, threshold)
 	cs := make([]frontend.Variable, threshold)
 	rs := make([]frontend.Variable, threshold)
-
-	peers := make([]int, len(idxs))
-	for i := 0; i < len(idxs); i++ {
-		peers[i] = idxs[i] + 1
-	}
 
 	for i := 0; i < threshold; i++ {
 
@@ -71,12 +66,13 @@ func PrepareTestData(secretData, domainSeparator string) (*TOPRFParams, error) {
 
 		resps[i] = utils.OutPointToInPoint(resp.Response)
 		sharePublicKeys[i] = utils.OutPointToInPoint(shares[idx].PublicKey)
-		coefficients[i] = utils.Coeff(peers[i], peers)
+		coefficients[i] = utils.Coeff(idxs[i], idxs)
 		cs[i] = resp.C
 		rs[i] = resp.R
 
 	}
 
+	// without TOPRF
 	resp, err := utils.OPRFEvaluate(sk, req.MaskedData)
 	if err != nil {
 		return nil, err

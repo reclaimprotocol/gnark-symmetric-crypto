@@ -41,24 +41,33 @@ func (circuit *AESWrapper) Define(_ frontend.API) error {
 	return nil
 }
 
+const Threshold = 2
+
 type OPRFData struct {
-	DomainSeparator frontend.Variable    `gnark:",public"`
-	ServerResponse  twistededwards.Point `gnark:",public"`
-	ServerPublicKey twistededwards.Point `gnark:",public"`
-	Output          twistededwards.Point `gnark:",public"` // after this point is hashed it will be the "nullifier"
-	// Proof values of DLEQ that ServerResponse was created with the same private key as server public key
-	C frontend.Variable `gnark:",public"`
-	S frontend.Variable `gnark:",public"`
+	DomainSeparator frontend.Variable `gnark:",public"`
+	Mask            frontend.Variable
+
+	Responses    [Threshold]twistededwards.Point `gnark:",public"` // responses per each node
+	Coefficients [Threshold]frontend.Variable    `gnark:",public"` // coeffs for reconstructing point & public key
+
+	// Proofs of DLEQ per node
+	SharePublicKeys [Threshold]twistededwards.Point `gnark:",public"`
+	C               [Threshold]frontend.Variable    `gnark:",public"`
+	R               [Threshold]frontend.Variable    `gnark:",public"`
+
+	Output twistededwards.Point `gnark:",public"`
 }
 
 type ChachaOPRFCircuit struct {
-	Counter [BITS_PER_WORD]frontend.Variable                          `gnark:",public"`
-	Nonce   [3][BITS_PER_WORD]frontend.Variable                       `gnark:",public"`
-	In      [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable `gnark:",public"` // ciphertext
+	Key     [8][BITS_PER_WORD]frontend.Variable
+	Counter [BITS_PER_WORD]frontend.Variable                           `gnark:",public"`
+	Nonce   [3][BITS_PER_WORD]frontend.Variable                        `gnark:",public"`
+	In      [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable  `gnark:",public"` // ciphertext
+	Out     [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable  // plaintext
+	BitMask [16 * CHACHA_OPRF_BLOCKS * BITS_PER_WORD]frontend.Variable `gnark:",public"` // bit mask for bits being hashed
 
-	// bit mask & length of "secret data" to be hashed in bytes
-	BitMask [16 * CHACHA_OPRF_BLOCKS * BITS_PER_WORD]frontend.Variable `gnark:",public"`
-	Len     frontend.Variable                                          `gnark:",public"`
+	// Length of "secret data" elements to be hashed. In bytes
+	Len frontend.Variable `gnark:",public"`
 
 	OPRF OPRFData
 }
@@ -172,33 +181,62 @@ type ChachaOPRFVerifier struct {
 }
 
 func (cv *ChachaOPRFVerifier) Verify(proof []byte, publicSignals []uint8) bool {
-	var params *InputChachaOPRFParams
-	err := json.Unmarshal(publicSignals, &params)
+	var iParams *InputChachaOPRFParams
+	err := json.Unmarshal(publicSignals, &iParams)
 	if err != nil {
 		fmt.Println(err)
 		return false
 	}
 
+	oprf := iParams.OPRF
+	if oprf == nil {
+		fmt.Println("OPRF params are empty")
+		return false
+	}
+
+	if len(oprf.C) != Threshold || len(oprf.R) != Threshold ||
+		len(oprf.NodeResponses) != Threshold || len(oprf.NodeIndexes) != Threshold {
+		fmt.Println("OPRF params are invalid")
+		return false
+	}
+
+	nodePublicKeys := make([]twistededwards.Point, Threshold)
+	resps := make([]twistededwards.Point, Threshold)
+	cs := make([]frontend.Variable, Threshold)
+	rs := make([]frontend.Variable, Threshold)
+	coeffs := make([]frontend.Variable, Threshold)
+
+	for i := 0; i < Threshold; i++ {
+		nodePublicKeys[i] = utils.UnmarshalPoint(oprf.NodePublicKeys[i])
+		coeffs[i] = utils.Coeff(oprf.NodeIndexes[i], oprf.NodeIndexes)
+		resps[i] = utils.UnmarshalPoint(oprf.NodeResponses[i])
+		cs[i] = new(big.Int).SetBytes(iParams.OPRF.C[i])
+		rs[i] = new(big.Int).SetBytes(iParams.OPRF.R[i])
+
+	}
+
 	witness := &ChachaOPRFCircuit{
 		OPRF: OPRFData{
-			DomainSeparator: new(big.Int).SetBytes(params.OPRF.DomainSeparator),
-			ServerResponse:  utils.UnmarshalPoint(params.OPRF.ServerResponse),
-			ServerPublicKey: utils.UnmarshalPoint(params.OPRF.ServerPublicKey),
-			Output:          utils.UnmarshalPoint(params.OPRF.Output),
-			C:               new(big.Int).SetBytes(params.OPRF.C),
-			S:               new(big.Int).SetBytes(params.OPRF.S),
+			DomainSeparator: new(big.Int).SetBytes(iParams.OPRF.DomainSeparator),
+			Output:          utils.UnmarshalPoint(iParams.OPRF.Output),
 		},
 	}
 
-	nonce := utils.BytesToUint32LEBits(params.Nonce)
-	counter := utils.Uint32ToBits(params.Counter)
+	copy(witness.OPRF.SharePublicKeys[:], nodePublicKeys)
+	copy(witness.OPRF.Coefficients[:], coeffs)
+	copy(witness.OPRF.Responses[:], resps)
+	copy(witness.OPRF.C[:], cs)
+	copy(witness.OPRF.R[:], rs)
 
-	copy(witness.In[:], utils.BytesToUint32BEBits(params.Input))
+	nonce := utils.BytesToUint32LEBits(iParams.Nonce)
+	counter := utils.Uint32ToBits(iParams.Counter)
+
+	copy(witness.In[:], utils.BytesToUint32BEBits(iParams.Input))
 	copy(witness.Nonce[:], nonce)
 	witness.Counter = counter
 
-	utils.SetBitmask(witness.BitMask[:], params.OPRF.Pos, params.OPRF.Len)
-	witness.Len = params.OPRF.Len
+	utils.SetBitmask(witness.BitMask[:], iParams.OPRF.Pos, iParams.OPRF.Len)
+	witness.Len = iParams.OPRF.Len
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	if err != nil {

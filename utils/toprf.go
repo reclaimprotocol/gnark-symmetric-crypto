@@ -15,7 +15,7 @@ type Share struct {
 	PublicKey  *twistededwards.PointAffine
 }
 
-func CreateShares(n, threshold int, secret *big.Int) ([]*Share, error) {
+func TOPRFCreateShares(n, threshold int, secret *big.Int) ([]*Share, error) {
 	curve := twistededwards.GetEdwardsCurve()
 	gf := &GF{P: TNBCurveOrder}
 	a := make([]*big.Int, threshold-1)
@@ -54,9 +54,12 @@ func CreateShares(n, threshold int, secret *big.Int) ([]*Share, error) {
 
 // Coeff calculates Lagrange coefficient for node with index idx
 func Coeff(idx int, peers []int) *big.Int {
+
+	// All peer indexes are [idx] + 1
+
 	gf := &GF{P: TNBCurveOrder}
 	peerLen := len(peers)
-	iScalar := big.NewInt(int64(idx))
+	iScalar := big.NewInt(int64(idx + 1))
 	divident := big.NewInt(1)
 	divisor := big.NewInt(1)
 
@@ -64,7 +67,7 @@ func Coeff(idx int, peers []int) *big.Int {
 		if peers[i] == idx {
 			continue
 		}
-		tmp := big.NewInt(int64(peers[i]))
+		tmp := big.NewInt(int64(peers[i] + 1))
 		divident = gf.Mul(divident, tmp)
 		tmp = gf.Sub(tmp, iScalar)
 		divisor = gf.Mul(divisor, tmp)
@@ -73,18 +76,13 @@ func Coeff(idx int, peers []int) *big.Int {
 	return gf.Mul(divisor, divident)
 }
 
-func TOPRFThresholdMult(idxs []int, responses []*twistededwards.PointAffine) *twistededwards.PointAffine {
-	peers := make([]int, len(idxs))
-	for i := 0; i < len(idxs); i++ {
-		peers[i] = idxs[i] + 1
-	}
-
+func TOPRFThresholdMul(idxs []int, responses []*twistededwards.PointAffine) *twistededwards.PointAffine {
 	result := &twistededwards.PointAffine{}
 	result.X.SetZero()
 	result.Y.SetOne()
 
 	for i := 0; i < len(responses); i++ {
-		lPoly := Coeff(peers[i], peers)
+		lPoly := Coeff(idxs[i], idxs)
 		gki := &twistededwards.PointAffine{}
 		gki.ScalarMultiplication(responses[i], lPoly)
 		result.Add(result, gki)

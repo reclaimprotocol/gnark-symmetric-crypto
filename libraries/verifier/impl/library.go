@@ -22,11 +22,14 @@ type OPRFParams struct {
 	Pos             uint32  `json:"pos"`
 	Len             uint32  `json:"len"`
 	DomainSeparator []uint8 `json:"domainSeparator"`
-	ServerResponse  []uint8 `json:"serverResponse"`
-	ServerPublicKey []uint8 `json:"serverPublicKey"`
+	PublicKey       []uint8 `json:"publicKey"`
 	Output          []uint8 `json:"output"`
-	C               []uint8 `json:"c"`
-	S               []uint8 `json:"s"`
+
+	NodeIndexes    []int     `json:"nodeIndexes"`
+	NodePublicKeys [][]uint8 `json:"nodePublicKey"`
+	NodeResponses  [][]uint8 `json:"nodeResponses"`
+	C              [][]uint8 `json:"c"`
+	R              [][]uint8 `json:"r"`
 }
 type InputChachaOPRFParams struct {
 	Nonce   []uint8     `json:"nonce"`

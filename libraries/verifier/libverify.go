@@ -40,6 +40,25 @@ func OPRF(params []byte) (proofRes unsafe.Pointer, resLen int) {
 		}
 	}()
 
-	res := oprf.OPRF(params)
+	res := oprf.OPRFEvaluate(params)
+	return C.CBytes(res), len(res)
+}
+
+//export TOPRFGenerateSharedKey
+func TOPRFGenerateSharedKey(params []byte) (proofRes unsafe.Pointer, resLen int) {
+
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+			bRes, er := json.Marshal(err)
+			if er != nil {
+				fmt.Println(er)
+			} else {
+				proofRes, resLen = C.CBytes(bRes), len(bRes)
+			}
+		}
+	}()
+
+	res := oprf.TOPRFGenerateSharedKey(params)
 	return C.CBytes(res), len(res)
 }

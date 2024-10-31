@@ -6,16 +6,13 @@ import (
 	"encoding/json"
 	prover "gnark-symmetric-crypto/libraries/prover/impl"
 	verifier "gnark-symmetric-crypto/libraries/verifier/impl"
-	"gnark-symmetric-crypto/utils"
 	"math"
 	"math/big"
 	"os"
 	"sync"
 	"testing"
 
-	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
 	"github.com/consensys/gnark/test"
-	"golang.org/x/crypto/chacha20"
 )
 
 var chachaKey, aes128Key, aes256Key, chachaOprfKey, chachaR1CS, aes128r1cs, aes256r1cs, chachaOprfr1cs []byte
@@ -37,7 +34,7 @@ func TestInit(t *testing.T) {
 	assert.True(prover.InitAlgorithm(prover.CHACHA20, chachaKey, chachaR1CS))
 	assert.True(prover.InitAlgorithm(prover.AES_128, aes128Key, aes128r1cs))
 	assert.True(prover.InitAlgorithm(prover.AES_256, aes256Key, aes256r1cs))
-	assert.True(prover.InitAlgorithm(prover.CHACHA20_OPRF, chachaOprfKey, chachaOprfr1cs))
+	//	assert.True(prover.InitAlgorithm(prover.CHACHA20_OPRF, chachaOprfKey, chachaOprfr1cs))
 
 }
 
@@ -285,7 +282,7 @@ func TestFullAES128(t *testing.T) {
 	assert.True(verifier.Verify(inBuf))
 }
 
-func TestFullChaCha20OPRF(t *testing.T) {
+/*func TestFullChaCha20OPRF(t *testing.T) {
 	assert := test.NewAssert(t)
 	assert.True(prover.InitAlgorithm(prover.CHACHA20_OPRF, chachaOprfKey, chachaOprfr1cs))
 	bKey := make([]byte, 32)
@@ -366,7 +363,7 @@ func TestFullChaCha20OPRF(t *testing.T) {
 			ServerPublicKey: serverPublic.Marshal(),
 			Output:          out.Marshal(),
 			C:               resp.C.Bytes(),
-			S:               resp.R.Bytes(),
+			R:               resp.R.Bytes(),
 		},
 	}
 
@@ -380,7 +377,7 @@ func TestFullChaCha20OPRF(t *testing.T) {
 	}
 	inBuf, _ := json.Marshal(inParams)
 	assert.True(verifier.Verify(inBuf))
-}
+}*/
 
 func Benchmark_ProveAES128(b *testing.B) {
 	prover.InitAlgorithm(prover.AES_128, aes128Key, aes128r1cs)

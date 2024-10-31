@@ -37,7 +37,7 @@ func TestOPRF(t *testing.T) {
 
 	nodes := 100
 	threshold := 50
-	shares, err := CreateShares(nodes, threshold, sk)
+	shares, err := TOPRFCreateShares(nodes, threshold, sk)
 	require.NoError(t, err)
 	resps := make([]*tbn254.PointAffine, threshold)
 	for i := 0; i < threshold; i++ {
@@ -51,7 +51,7 @@ func TestOPRF(t *testing.T) {
 		idxs[i] = i
 	}
 
-	evaled := TOPRFThresholdMult(idxs, resps)
+	evaled := TOPRFThresholdMul(idxs, resps)
 
 	// output calc
 	invR := new(big.Int)
