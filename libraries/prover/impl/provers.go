@@ -280,7 +280,7 @@ func (cp *ChaChaOPRFProver) Prove(params *InputParams) (proof []byte, output []u
 		TOPRF: chachaV3_oprf.TOPRFData{
 			DomainSeparator:   new(big.Int).SetBytes(oprf.DomainSeparator),
 			Mask:              new(big.Int).SetBytes(oprf.Mask),
-			Output:            utils.UnmarshalPoint(oprf.Output),
+			Output:            new(big.Int).SetBytes(oprf.Output),
 			EvaluatedElements: resps,
 			Coefficients:      coeffs,
 			PublicKeys:        pubKeys,

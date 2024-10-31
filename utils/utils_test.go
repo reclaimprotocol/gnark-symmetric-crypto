@@ -33,7 +33,7 @@ func TestOPRF(t *testing.T) {
 	res, err := OPRFFinalize(serverPublic, req, resp)
 	require.NoError(t, err)
 
-	require.Equal(t, "jH6BFWtyH0HQGJCJ+vM9eIkBdXrLypeAOSmwz2UtxYs=", base64.StdEncoding.EncodeToString(res.Marshal()))
+	require.Equal(t, "EnTod4kXJzeXybI7tRvGjU7GYYRXz8tEJ2Az0L2XQIc=", base64.StdEncoding.EncodeToString(res.Bytes()))
 
 	nodes := 100
 	threshold := 50
@@ -51,13 +51,7 @@ func TestOPRF(t *testing.T) {
 		idxs[i] = i
 	}
 
-	evaled := TOPRFThresholdMul(idxs, resps)
-
-	// output calc
-	invR := new(big.Int)
-	invR.ModInverse(req.Mask, TNBCurveOrder) // mask^-1
-
-	output := &tbn254.PointAffine{}
-	output.ScalarMultiplication(evaled, invR) // H *mask * sk * mask^-1 = H * sk
-	require.Equal(t, "jH6BFWtyH0HQGJCJ+vM9eIkBdXrLypeAOSmwz2UtxYs=", base64.StdEncoding.EncodeToString(output.Marshal()))
+	out, err := TOPRFFinalize(idxs, resps, req.SecretElements, req.Mask)
+	require.NoError(t, err)
+	require.Equal(t, "EnTod4kXJzeXybI7tRvGjU7GYYRXz8tEJ2Az0L2XQIc=", base64.StdEncoding.EncodeToString(out.Bytes()))
 }

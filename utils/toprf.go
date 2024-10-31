@@ -90,7 +90,7 @@ func TOPRFThresholdMul(idxs []int, elements []*twistededwards.PointAffine) *twis
 	return result
 }
 
-func TOPRFFinalize(idxs []int, elements []*twistededwards.PointAffine, mask *big.Int) (*twistededwards.PointAffine, error) {
+func TOPRFFinalize(idxs []int, elements []*twistededwards.PointAffine, secretElements [2]*big.Int, mask *big.Int) (*big.Int, error) {
 
 	res := TOPRFThresholdMul(idxs, elements)
 
@@ -98,9 +98,15 @@ func TOPRFFinalize(idxs []int, elements []*twistededwards.PointAffine, mask *big
 	invR := new(big.Int)
 	invR.ModInverse(mask, TNBCurveOrder) // mask^-1
 
-	output := &twistededwards.PointAffine{}
-	output.ScalarMultiplication(res, invR) // H *mask * sk * mask^-1 = H * sk
-	return output, nil
+	deblinded := &twistededwards.PointAffine{}
+	deblinded.ScalarMultiplication(res, invR) // H *mask * sk * mask^-1 = H * sk
+
+	x := deblinded.X.BigInt(new(big.Int))
+	y := deblinded.Y.BigInt(new(big.Int))
+
+	out := hashToScalar(x.Bytes(), y.Bytes(), secretElements[0].Bytes(), secretElements[1].Bytes())
+
+	return new(big.Int).SetBytes(out), nil
 }
 
 type Src struct{}

@@ -362,7 +362,7 @@ func TestFullChaCha20OPRF(t *testing.T) {
 		assert.NoError(err)
 	}
 
-	out, err := utils.TOPRFFinalize(idxs, elements, req.Mask)
+	out, err := utils.TOPRFFinalize(idxs, elements, req.SecretElements, req.Mask)
 	assert.NoError(err)
 
 	inputParams := &prover.InputParams{
@@ -376,7 +376,7 @@ func TestFullChaCha20OPRF(t *testing.T) {
 			Len:             uint32(len([]byte(email))),
 			Mask:            req.Mask.Bytes(),
 			DomainSeparator: []byte(domainSeparator),
-			Output:          out.Marshal(),
+			Output:          out.Bytes(),
 			Responses:       responses,
 		},
 	}
@@ -410,7 +410,7 @@ func TestFullChaCha20OPRF(t *testing.T) {
 			Pos:             pos,
 			Len:             uint32(len([]byte(email))),
 			DomainSeparator: []byte(domainSeparator),
-			Output:          out.Marshal(),
+			Output:          out.Bytes(),
 			Responses:       verifyResponses,
 		},
 	}

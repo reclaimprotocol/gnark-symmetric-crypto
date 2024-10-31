@@ -25,7 +25,7 @@ type TOPRFData struct {
 	C          [toprf.Threshold]frontend.Variable    `gnark:",public"`
 	R          [toprf.Threshold]frontend.Variable    `gnark:",public"`
 
-	Output twistededwards.Point `gnark:",public"`
+	Output frontend.Variable `gnark:",public"`
 }
 
 type ChachaTOPRFCircuit struct {

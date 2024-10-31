@@ -182,7 +182,7 @@ func (cv *ChachaOPRFVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 			PublicKeys:        nodePublicKeys,
 			C:                 cs,
 			R:                 rs,
-			Output:            utils.UnmarshalPoint(oprf.Output),
+			Output:            new(big.Int).SetBytes(oprf.Output),
 		},
 	}
 

@@ -95,18 +95,24 @@ func OPRFEvaluate(serverPrivate *big.Int, request *twistededwards.PointAffine) (
 	}, nil
 }
 
-func OPRFFinalize(serverPublic *twistededwards.PointAffine, request *OPRFRequest, response *OPRFResponse) (*twistededwards.PointAffine, error) {
+func OPRFFinalize(serverPublic *twistededwards.PointAffine, request *OPRFRequest, response *OPRFResponse) (*big.Int, error) {
 	if !VerifyDLEQ(response.C, response.R, serverPublic, response.EvaluatedPoint, request.MaskedData) {
 		return nil, errors.New("DLEQ proof is invalid")
 	}
 
-	// output calc
+	// deblinded calc
 	invR := new(big.Int)
 	invR.ModInverse(request.Mask, TNBCurveOrder) // mask^-1
 
-	output := &twistededwards.PointAffine{}
-	output.ScalarMultiplication(response.EvaluatedPoint, invR) // H *mask * sk * mask^-1 = H * sk
-	return output, nil
+	deblinded := &twistededwards.PointAffine{}
+	deblinded.ScalarMultiplication(response.EvaluatedPoint, invR) // H *mask * sk * mask^-1 = H * sk
+
+	x := deblinded.X.BigInt(new(big.Int))
+	y := deblinded.Y.BigInt(new(big.Int))
+
+	out := hashToScalar(x.Bytes(), y.Bytes(), request.SecretElements[0].Bytes(), request.SecretElements[1].Bytes())
+
+	return new(big.Int).SetBytes(out), nil
 }
 
 func hashToScalar(data ...[]byte) []byte {

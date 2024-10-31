@@ -24,7 +24,7 @@ type TOPRFParams struct {
 	C               [Threshold]frontend.Variable    `gnark:",public"`
 	R               [Threshold]frontend.Variable    `gnark:",public"`
 
-	Output twistededwards.Point `gnark:",public"`
+	Output frontend.Variable `gnark:",public"` // hash of deblinded point + secret data
 }
 
 type TOPRF struct {
@@ -35,7 +35,7 @@ func (n *TOPRF) Define(api frontend.API) error {
 	return VerifyTOPRF(api, n.TOPRFParams)
 }
 
-func VerifyTOPRF(api frontend.API, n *TOPRFParams) error {
+func VerifyTOPRF(api frontend.API, p *TOPRFParams) error {
 	curve, err := twistededwards.NewEdCurve(api, tbn.BN254)
 	if err != nil {
 		return err
@@ -46,37 +46,44 @@ func VerifyTOPRF(api frontend.API, n *TOPRFParams) error {
 	}
 	helper := NewBabyJubFieldHelper(api)
 
-	curve.AssertIsOnCurve(n.Output)
-
-	maskBits := bits.ToBinary(api, n.Mask, bits.WithNbDigits(api.Compiler().Field().BitLen()))
+	maskBits := bits.ToBinary(api, p.Mask, bits.WithNbDigits(api.Compiler().Field().BitLen()))
 	mask := field.FromBits(maskBits...)
 
-	dataPoint, err := hashToPoint(api, curve, n.SecretData, n.DomainSeparator)
+	dataPoint, err := hashToPoint(api, curve, p.SecretData, p.DomainSeparator)
 	if err != nil {
 		return err
 	}
 
-	masked := curve.ScalarMul(*dataPoint, n.Mask)
+	masked := curve.ScalarMul(*dataPoint, p.Mask)
 
 	// verify each DLEQ first
 
 	for i := 0; i < Threshold; i++ {
-		curve.AssertIsOnCurve(n.Responses[i])
-		curve.AssertIsOnCurve(n.SharePublicKeys[i])
-		err = checkDLEQ(api, curve, masked, n.Responses[i], n.SharePublicKeys[i], n.C[i], n.R[i])
+		curve.AssertIsOnCurve(p.Responses[i])
+		curve.AssertIsOnCurve(p.SharePublicKeys[i])
+		err = checkDLEQ(api, curve, masked, p.Responses[i], p.SharePublicKeys[i], p.C[i], p.R[i])
 		if err != nil {
 			return err
 		}
 	}
 
-	response := TOPRFMult(curve, n.Responses[:], n.Coefficients[:])
+	response := TOPRFMult(curve, p.Responses[:], p.Coefficients[:])
 
 	invMask := helper.packScalarToVar(field.Inverse(mask))
 	unMasked := curve.ScalarMul(response, invMask)
 
-	api.AssertIsEqual(n.Output.X, unMasked.X)
-	api.AssertIsEqual(n.Output.Y, unMasked.Y)
+	hash, err := mimc.NewMiMC(api)
+	if err != nil {
+		return err
+	}
 
+	hash.Write(unMasked.X)
+	hash.Write(unMasked.Y)
+	hash.Write(p.SecretData[0])
+	hash.Write(p.SecretData[1])
+	out := hash.Sum()
+
+	api.AssertIsEqual(p.Output, out)
 	return nil
 }
 
@@ -148,12 +155,6 @@ func hashToPoint(api frontend.API, curve twistededwards.Curve, data [2]frontend.
 	hField.Write(domainSeparator)
 	hashedSecretData := hField.Sum()
 	hField.Reset()
-
-	// reduce modulo babyJub order, might omit in future to save constraints
-	/*dataBits := bits.ToBinary(api, hashedSecretData, bits.WithNbDigits(254))
-	reduced := field.FromBits(dataBits...)
-	reduced = field.ReduceStrict(reduced)
-	hashedSecretData = helper.packScalarToVar(reduced)*/
 
 	basePoint := twistededwards.Point{
 		X: curve.Params().Base[0],

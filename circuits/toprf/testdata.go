@@ -86,7 +86,7 @@ func PrepareTestData(secretData, domainSeparator string) (*TOPRFParams, error) {
 	data := &TOPRFParams{
 		SecretData:      [2]frontend.Variable{req.SecretElements[0], req.SecretElements[1]},
 		DomainSeparator: new(big.Int).SetBytes([]byte(domainSeparator)),
-		Output:          utils.OutPointToInPoint(out),
+		Output:          out,
 		Mask:            req.Mask,
 	}
 
