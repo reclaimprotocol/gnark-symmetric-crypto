@@ -69,6 +69,15 @@ func OPRFGenerateRequest(secretData, domainSeparator string) (*OPRFRequest, erro
 
 func OPRFEvaluate(serverPrivate *big.Int, request *twistededwards.PointAffine) (*OPRFResponse, error) {
 	curve := twistededwards.GetEdwardsCurve()
+
+	t := new(twistededwards.PointAffine)
+	t.Set(request)
+	t.ScalarMultiplication(t, big.NewInt(8)) // cofactor check
+
+	if !t.IsOnCurve() {
+		return nil, fmt.Errorf("request point is not on curve")
+	}
+
 	resp := &twistededwards.PointAffine{}
 	resp.ScalarMultiplication(request, serverPrivate) // H*mask*sk
 
