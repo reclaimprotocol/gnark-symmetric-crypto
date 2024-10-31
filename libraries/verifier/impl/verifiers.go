@@ -45,7 +45,6 @@ const Threshold = 2
 
 type OPRFData struct {
 	DomainSeparator frontend.Variable `gnark:",public"`
-	Mask            frontend.Variable
 
 	Responses    [Threshold]twistededwards.Point `gnark:",public"` // responses per each node
 	Coefficients [Threshold]frontend.Variable    `gnark:",public"` // coeffs for reconstructing point & public key
@@ -59,7 +58,6 @@ type OPRFData struct {
 }
 
 type ChachaOPRFCircuit struct {
-	Key     [8][BITS_PER_WORD]frontend.Variable
 	Counter [BITS_PER_WORD]frontend.Variable                           `gnark:",public"`
 	Nonce   [3][BITS_PER_WORD]frontend.Variable                        `gnark:",public"`
 	In      [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable  `gnark:",public"` // ciphertext
@@ -188,45 +186,49 @@ func (cv *ChachaOPRFVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 		return false
 	}
 
-	oprf := iParams.OPRF
-	if oprf == nil {
+	oprf := iParams.TOPRF
+	if oprf == nil || oprf.Responses == nil {
 		fmt.Println("OPRF params are empty")
 		return false
 	}
 
-	if len(oprf.C) != Threshold || len(oprf.R) != Threshold ||
-		len(oprf.NodeResponses) != Threshold || len(oprf.NodeIndexes) != Threshold {
+	resps := oprf.Responses
+	if len(resps) != Threshold {
 		fmt.Println("OPRF params are invalid")
 		return false
 	}
 
-	nodePublicKeys := make([]twistededwards.Point, Threshold)
-	resps := make([]twistededwards.Point, Threshold)
-	cs := make([]frontend.Variable, Threshold)
-	rs := make([]frontend.Variable, Threshold)
-	coeffs := make([]frontend.Variable, Threshold)
+	var nodePublicKeys [Threshold]twistededwards.Point
+	var evals [Threshold]twistededwards.Point
+	var cs [Threshold]frontend.Variable
+	var rs [Threshold]frontend.Variable
+	var coeffs [Threshold]frontend.Variable
+
+	idxs := make([]int, Threshold)
+	for i := 0; i < Threshold; i++ {
+		idxs[i] = int(resps[i].Index)
+	}
 
 	for i := 0; i < Threshold; i++ {
-		nodePublicKeys[i] = utils.UnmarshalPoint(oprf.NodePublicKeys[i])
-		coeffs[i] = utils.Coeff(oprf.NodeIndexes[i], oprf.NodeIndexes)
-		resps[i] = utils.UnmarshalPoint(oprf.NodeResponses[i])
-		cs[i] = new(big.Int).SetBytes(iParams.OPRF.C[i])
-		rs[i] = new(big.Int).SetBytes(iParams.OPRF.R[i])
-
+		resp := resps[i]
+		nodePublicKeys[i] = utils.UnmarshalPoint(resp.PublicKey)
+		evals[i] = utils.UnmarshalPoint(resp.Evaluated)
+		cs[i] = new(big.Int).SetBytes(resp.C)
+		rs[i] = new(big.Int).SetBytes(resp.R)
+		coeffs[i] = utils.Coeff(idxs[i], idxs)
 	}
 
 	witness := &ChachaOPRFCircuit{
 		OPRF: OPRFData{
-			DomainSeparator: new(big.Int).SetBytes(iParams.OPRF.DomainSeparator),
-			Output:          utils.UnmarshalPoint(iParams.OPRF.Output),
+			DomainSeparator: new(big.Int).SetBytes(oprf.DomainSeparator),
+			Responses:       evals,
+			Coefficients:    coeffs,
+			SharePublicKeys: nodePublicKeys,
+			C:               cs,
+			R:               rs,
+			Output:          utils.UnmarshalPoint(oprf.Output),
 		},
 	}
-
-	copy(witness.OPRF.SharePublicKeys[:], nodePublicKeys)
-	copy(witness.OPRF.Coefficients[:], coeffs)
-	copy(witness.OPRF.Responses[:], resps)
-	copy(witness.OPRF.C[:], cs)
-	copy(witness.OPRF.R[:], rs)
 
 	nonce := utils.BytesToUint32LEBits(iParams.Nonce)
 	counter := utils.Uint32ToBits(iParams.Counter)
@@ -235,8 +237,8 @@ func (cv *ChachaOPRFVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 	copy(witness.Nonce[:], nonce)
 	witness.Counter = counter
 
-	utils.SetBitmask(witness.BitMask[:], iParams.OPRF.Pos, iParams.OPRF.Len)
-	witness.Len = iParams.OPRF.Len
+	utils.SetBitmask(witness.BitMask[:], oprf.Pos, oprf.Len)
+	witness.Len = oprf.Len
 
 	wtns, err := frontend.NewWitness(witness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	if err != nil {

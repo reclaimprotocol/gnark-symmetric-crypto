@@ -38,7 +38,7 @@ func OPRFEvaluate(params []byte) []byte {
 	}
 
 	res, err := json.Marshal(&OutputOPRFParams{
-		Response: resp.Response.Marshal(),
+		Response: resp.EvaluatedPoint.Marshal(),
 		C:        resp.C.Bytes(),
 		S:        resp.R.Bytes(),
 	})
@@ -50,7 +50,7 @@ func OPRFEvaluate(params []byte) []byte {
 
 type InputGenerateParams struct {
 	Nodes     uint8 `json:"nodes"`
-	Threshold uint8 `json:"maskedData"`
+	Threshold uint8 `json:"threshold"`
 }
 
 type Share struct {

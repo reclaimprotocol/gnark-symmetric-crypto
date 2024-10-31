@@ -76,18 +76,31 @@ func Coeff(idx int, peers []int) *big.Int {
 	return gf.Mul(divisor, divident)
 }
 
-func TOPRFThresholdMul(idxs []int, responses []*twistededwards.PointAffine) *twistededwards.PointAffine {
+func TOPRFThresholdMul(idxs []int, elements []*twistededwards.PointAffine) *twistededwards.PointAffine {
 	result := &twistededwards.PointAffine{}
 	result.X.SetZero()
 	result.Y.SetOne()
 
-	for i := 0; i < len(responses); i++ {
+	for i := 0; i < len(elements); i++ {
 		lPoly := Coeff(idxs[i], idxs)
 		gki := &twistededwards.PointAffine{}
-		gki.ScalarMultiplication(responses[i], lPoly)
+		gki.ScalarMultiplication(elements[i], lPoly)
 		result.Add(result, gki)
 	}
 	return result
+}
+
+func TOPRFFinalize(idxs []int, elements []*twistededwards.PointAffine, mask *big.Int) (*twistededwards.PointAffine, error) {
+
+	res := TOPRFThresholdMul(idxs, elements)
+
+	// output calc
+	invR := new(big.Int)
+	invR.ModInverse(mask, TNBCurveOrder) // mask^-1
+
+	output := &twistededwards.PointAffine{}
+	output.ScalarMultiplication(res, invR) // H *mask * sk * mask^-1 = H * sk
+	return output, nil
 }
 
 type Src struct{}

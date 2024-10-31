@@ -21,9 +21,9 @@ type OPRFRequest struct {
 }
 
 type OPRFResponse struct {
-	Response *twistededwards.PointAffine
-	C        *big.Int
-	R        *big.Int
+	EvaluatedPoint *twistededwards.PointAffine
+	C              *big.Int
+	R              *big.Int
 }
 
 func OPRFGenerateRequest(secretData, domainSeparator string) (*OPRFRequest, error) {
@@ -89,14 +89,14 @@ func OPRFEvaluate(serverPrivate *big.Int, request *twistededwards.PointAffine) (
 		return nil, err
 	}
 	return &OPRFResponse{
-		Response: resp,
-		C:        c,
-		R:        r,
+		EvaluatedPoint: resp,
+		C:              c,
+		R:              r,
 	}, nil
 }
 
 func OPRFFinalize(serverPublic *twistededwards.PointAffine, request *OPRFRequest, response *OPRFResponse) (*twistededwards.PointAffine, error) {
-	if !VerifyDLEQ(response.C, response.R, serverPublic, response.Response, request.MaskedData) {
+	if !VerifyDLEQ(response.C, response.R, serverPublic, response.EvaluatedPoint, request.MaskedData) {
 		return nil, errors.New("DLEQ proof is invalid")
 	}
 
@@ -105,7 +105,7 @@ func OPRFFinalize(serverPublic *twistededwards.PointAffine, request *OPRFRequest
 	invR.ModInverse(request.Mask, TNBCurveOrder) // mask^-1
 
 	output := &twistededwards.PointAffine{}
-	output.ScalarMultiplication(response.Response, invR) // H *mask * sk * mask^-1 = H * sk
+	output.ScalarMultiplication(response.EvaluatedPoint, invR) // H *mask * sk * mask^-1 = H * sk
 	return output, nil
 }
 
@@ -181,4 +181,13 @@ func OutPointToInPoint(point *twistededwards.PointAffine) tbn.Point {
 		Y: point.Y.BigInt(&big.Int{}),
 	}
 	return res
+}
+
+func UnmarshalTBNPoint(data []byte) tbn.Point {
+	e := new(twistededwards.PointAffine)
+	err := e.Unmarshal(data)
+	if err != nil || !e.IsOnCurve() {
+		panic(err)
+	}
+	return OutPointToInPoint(e)
 }

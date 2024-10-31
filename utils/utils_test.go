@@ -43,7 +43,7 @@ func TestOPRF(t *testing.T) {
 	for i := 0; i < threshold; i++ {
 		resp, err = OPRFEvaluate(shares[i].PrivateKey, req.MaskedData)
 		require.NoError(t, err)
-		resps[i] = resp.Response
+		resps[i] = resp.EvaluatedPoint
 	}
 
 	idxs := make([]int, threshold)

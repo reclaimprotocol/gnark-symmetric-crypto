@@ -18,24 +18,28 @@ type InputVerifyParams struct {
 	PublicSignals []uint8 `json:"publicSignals"`
 }
 
-type OPRFParams struct {
-	Pos             uint32  `json:"pos"`
-	Len             uint32  `json:"len"`
-	DomainSeparator []uint8 `json:"domainSeparator"`
-	PublicKey       []uint8 `json:"publicKey"`
-	Output          []uint8 `json:"output"`
-
-	NodeIndexes    []int     `json:"nodeIndexes"`
-	NodePublicKeys [][]uint8 `json:"nodePublicKey"`
-	NodeResponses  [][]uint8 `json:"nodeResponses"`
-	C              [][]uint8 `json:"c"`
-	R              [][]uint8 `json:"r"`
+type TOPRFResponse struct {
+	Index     uint8   `json:"index"`
+	PublicKey []byte  `json:"publicKey"`
+	Evaluated []uint8 `json:"evaluated"`
+	C         []byte  `json:"c"`
+	R         []byte  `json:"r"`
 }
+
+type TOPRFParams struct {
+	Pos             uint32           `json:"pos"`
+	Len             uint32           `json:"len"`
+	Mask            []uint8          `json:"mask"`
+	DomainSeparator []uint8          `json:"domainSeparator"`
+	Output          []uint8          `json:"output"`
+	Responses       []*TOPRFResponse `json:"responses"`
+}
+
 type InputChachaOPRFParams struct {
-	Nonce   []uint8     `json:"nonce"`
-	Counter uint32      `json:"counter"`
-	Input   []uint8     `json:"input"` // ciphertext
-	OPRF    *OPRFParams `json:"oprf"`
+	Nonce   []uint8      `json:"nonce"`
+	Counter uint32       `json:"counter"`
+	Input   []uint8      `json:"input"` // usually it's redacted ciphertext
+	TOPRF   *TOPRFParams `json:"toprf"`
 }
 
 var verifiers = make(map[string]Verifier)

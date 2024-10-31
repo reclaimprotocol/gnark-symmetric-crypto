@@ -64,7 +64,7 @@ func PrepareTestData(secretData, domainSeparator string) (*TOPRFParams, error) {
 			return nil, err
 		}
 
-		resps[i] = utils.OutPointToInPoint(resp.Response)
+		resps[i] = utils.OutPointToInPoint(resp.EvaluatedPoint)
 		sharePublicKeys[i] = utils.OutPointToInPoint(shares[idx].PublicKey)
 		coefficients[i] = utils.Coeff(idxs[i], idxs)
 		cs[i] = resp.C

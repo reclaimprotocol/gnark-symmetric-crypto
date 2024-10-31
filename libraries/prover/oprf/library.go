@@ -88,9 +88,9 @@ func ProcessOPRFResponse(params []byte) []byte {
 		panic(err)
 	}
 	resp := &utils.OPRFResponse{
-		Response: oprfResponse,
-		C:        new(big.Int).SetBytes(inputParams.Response.C),
-		R:        new(big.Int).SetBytes(inputParams.Response.S),
+		EvaluatedPoint: oprfResponse,
+		C:              new(big.Int).SetBytes(inputParams.Response.C),
+		R:              new(big.Int).SetBytes(inputParams.Response.S),
 	}
 
 	output, err := utils.OPRFFinalize(serverPublicKey, req, resp)
