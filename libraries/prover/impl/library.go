@@ -26,7 +26,7 @@ var algorithmNames = map[uint8]string{
 	CHACHA20:      "chacha20",
 	AES_128:       "aes-128-ctr",
 	AES_256:       "aes-256-ctr",
-	CHACHA20_OPRF: "chacha20-oprf",
+	CHACHA20_OPRF: "chacha20-toprf",
 }
 
 var provers = map[string]*ProverParams{
@@ -45,7 +45,7 @@ var provers = map[string]*ProverParams{
 		CircuitHash: "7b03be9e28a5c6de19da34cfd9fad9e7dab62cda8873fada4e916b1978bbf692",
 		Prover:      &AESProver{},
 	},
-	"chacha20-oprf": {
+	"chacha20-toprf": {
 		KeyHash:     "7d1c3a67963fa151e0b4739b7b07db98aacf5d1428b7360580c0c1131e8782d2",
 		CircuitHash: "8768aef6fb8f7d5887c02057dbdf82abc2c4075ba7db1b84d7b7328acc93c0ec",
 		Prover:      &ChaChaOPRFProver{},

@@ -35,7 +35,7 @@ type TOPRFParams struct {
 	Responses       []*TOPRFResponse `json:"responses"`
 }
 
-type InputChachaOPRFParams struct {
+type InputChachaTOPRFParams struct {
 	Nonce   []uint8      `json:"nonce"`
 	Counter uint32       `json:"counter"`
 	Input   []uint8      `json:"input"` // usually it's redacted ciphertext
@@ -89,7 +89,7 @@ func init() {
 		panic(err)
 	}
 
-	verifiers["chacha20-oprf"] = &ChachaOPRFVerifier{vk: vk}
+	verifiers["chacha20-toprf"] = &ChachaOPRFVerifier{vk: vk}
 }
 
 func Verify(params []byte) (res bool) {

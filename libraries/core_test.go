@@ -366,7 +366,7 @@ func TestFullChaCha20OPRF(t *testing.T) {
 	assert.NoError(err)
 
 	inputParams := &prover.InputParams{
-		Cipher:  "chacha20-oprf",
+		Cipher:  "chacha20-toprf",
 		Key:     bKey,
 		Nonce:   bNonce,
 		Counter: counter,
@@ -402,7 +402,7 @@ func TestFullChaCha20OPRF(t *testing.T) {
 			R:         r.R,
 		}
 	}
-	oprfParams := &verifier.InputChachaOPRFParams{
+	oprfParams := &verifier.InputChachaTOPRFParams{
 		Nonce:   bNonce,
 		Counter: counter,
 		Input:   bInput,

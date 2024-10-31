@@ -43,7 +43,7 @@ func (circuit *AESWrapper) Define(_ frontend.API) error {
 
 const Threshold = 2
 
-type OPRFData struct {
+type TOPRFData struct {
 	DomainSeparator frontend.Variable `gnark:",public"`
 
 	Responses    [Threshold]twistededwards.Point `gnark:",public"` // responses per each node
@@ -57,7 +57,7 @@ type OPRFData struct {
 	Output twistededwards.Point `gnark:",public"`
 }
 
-type ChachaOPRFCircuit struct {
+type ChachaTOPRFCircuit struct {
 	Counter [BITS_PER_WORD]frontend.Variable                           `gnark:",public"`
 	Nonce   [3][BITS_PER_WORD]frontend.Variable                        `gnark:",public"`
 	In      [16 * CHACHA_OPRF_BLOCKS][BITS_PER_WORD]frontend.Variable  `gnark:",public"` // ciphertext
@@ -67,10 +67,10 @@ type ChachaOPRFCircuit struct {
 	// Length of "secret data" elements to be hashed. In bytes
 	Len frontend.Variable `gnark:",public"`
 
-	OPRF OPRFData
+	TOPRF TOPRFData
 }
 
-func (circuit *ChachaOPRFCircuit) Define(_ frontend.API) error {
+func (circuit *ChachaTOPRFCircuit) Define(_ frontend.API) error {
 	return nil
 }
 
@@ -179,7 +179,7 @@ type ChachaOPRFVerifier struct {
 }
 
 func (cv *ChachaOPRFVerifier) Verify(proof []byte, publicSignals []uint8) bool {
-	var iParams *InputChachaOPRFParams
+	var iParams *InputChachaTOPRFParams
 	err := json.Unmarshal(publicSignals, &iParams)
 	if err != nil {
 		fmt.Println(err)
@@ -188,13 +188,13 @@ func (cv *ChachaOPRFVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 
 	oprf := iParams.TOPRF
 	if oprf == nil || oprf.Responses == nil {
-		fmt.Println("OPRF params are empty")
+		fmt.Println("TOPRF params are empty")
 		return false
 	}
 
 	resps := oprf.Responses
 	if len(resps) != Threshold {
-		fmt.Println("OPRF params are invalid")
+		fmt.Println("TOPRF params are invalid")
 		return false
 	}
 
@@ -218,8 +218,8 @@ func (cv *ChachaOPRFVerifier) Verify(proof []byte, publicSignals []uint8) bool {
 		coeffs[i] = utils.Coeff(idxs[i], idxs)
 	}
 
-	witness := &ChachaOPRFCircuit{
-		OPRF: OPRFData{
+	witness := &ChachaTOPRFCircuit{
+		TOPRF: TOPRFData{
 			DomainSeparator: new(big.Int).SetBytes(oprf.DomainSeparator),
 			Responses:       evals,
 			Coefficients:    coeffs,
