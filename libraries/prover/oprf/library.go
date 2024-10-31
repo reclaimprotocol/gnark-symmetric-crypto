@@ -99,7 +99,7 @@ func ProcessOPRFResponse(params []byte) []byte {
 	}
 
 	res, err := json.Marshal(&OutputOPRFResponseParams{
-		Output: output.Marshal(),
+		Output: output.Bytes(),
 	})
 	if err != nil {
 		panic(err)
