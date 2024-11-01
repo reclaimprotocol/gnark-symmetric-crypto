@@ -61,13 +61,13 @@ func VerifyTOPRF(api frontend.API, p *TOPRFParams) error {
 	for i := 0; i < Threshold; i++ {
 		curve.AssertIsOnCurve(p.Responses[i])
 		curve.AssertIsOnCurve(p.SharePublicKeys[i])
-		err = checkDLEQ(api, curve, masked, p.Responses[i], p.SharePublicKeys[i], p.C[i], p.R[i])
+		err = verifyDLEQ(api, curve, masked, p.Responses[i], p.SharePublicKeys[i], p.C[i], p.R[i])
 		if err != nil {
 			return err
 		}
 	}
 
-	response := TOPRFMult(curve, p.Responses[:], p.Coefficients[:])
+	response := toprfMul(curve, p.Responses, p.Coefficients)
 
 	invMask := helper.packScalarToVar(field.Inverse(mask))
 	unMasked := curve.ScalarMul(response, invMask)
@@ -87,22 +87,29 @@ func VerifyTOPRF(api frontend.API, p *TOPRFParams) error {
 	return nil
 }
 
-func TOPRFMult(curve twistededwards.Curve, points []twistededwards.Point, coeffs []frontend.Variable) twistededwards.Point {
-	result := twistededwards.Point{
-		X: 0,
-		Y: 1,
-	}
+//goland:noinspection GoBoolExpressions
+func toprfMul(curve twistededwards.Curve, points [Threshold]twistededwards.Point, coeffs [Threshold]frontend.Variable) twistededwards.Point {
 
-	for i := 0; i < len(points); i++ {
-		lPoly := coeffs[i]
-		gki := curve.ScalarMul(points[i], lPoly)
-		result = curve.Add(result, gki)
+	// We can use DoubleBaseScalarMul to reduce constraints if Threshold is 2
+	if Threshold == 2 {
+		return curve.DoubleBaseScalarMul(points[0], points[1], coeffs[0], coeffs[1])
+	} else {
+		result := twistededwards.Point{
+			X: 0,
+			Y: 1,
+		}
+
+		for i := 0; i < len(points); i++ {
+			lPoly := coeffs[i]
+			gki := curve.ScalarMul(points[i], lPoly)
+			result = curve.Add(result, gki)
+		}
+		return result
 	}
-	return result
 
 }
 
-func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, serverPublicKey twistededwards.Point, challenge, r frontend.Variable) error {
+func verifyDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, serverPublicKey twistededwards.Point, c, r frontend.Variable) error {
 	hField, err := mimc.NewMiMC(api)
 	if err != nil {
 		return err
@@ -113,13 +120,8 @@ func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, s
 		Y: curve.Params().Base[1],
 	}
 
-	rG := curve.ScalarMul(basePoint, r)
-	chG := curve.ScalarMul(serverPublicKey, challenge)
-	t1 := curve.Add(rG, chG)
-
-	rH := curve.ScalarMul(masked, r)
-	cH := curve.ScalarMul(response, challenge)
-	t2 := curve.Add(rH, cH)
+	vG := curve.DoubleBaseScalarMul(basePoint, serverPublicKey, r, c)
+	vH := curve.DoubleBaseScalarMul(masked, response, r, c)
 
 	hField.Write(basePoint.X)
 	hField.Write(basePoint.Y)
@@ -127,11 +129,11 @@ func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, s
 	hField.Write(serverPublicKey.X)
 	hField.Write(serverPublicKey.Y)
 
-	hField.Write(t1.X)
-	hField.Write(t1.Y)
+	hField.Write(vG.X)
+	hField.Write(vG.Y)
 
-	hField.Write(t2.X)
-	hField.Write(t2.Y)
+	hField.Write(vH.X)
+	hField.Write(vH.Y)
 
 	hField.Write(masked.X)
 	hField.Write(masked.Y)
@@ -141,7 +143,7 @@ func checkDLEQ(api frontend.API, curve twistededwards.Curve, masked, response, s
 
 	expectedChallenge := hField.Sum()
 	hField.Reset()
-	api.AssertIsEqual(expectedChallenge, challenge)
+	api.AssertIsEqual(expectedChallenge, c)
 	return nil
 }
 

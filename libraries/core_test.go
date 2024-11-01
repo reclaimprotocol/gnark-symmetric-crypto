@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"gnark-symmetric-crypto/circuits/toprf"
 	prover "gnark-symmetric-crypto/libraries/prover/impl"
 	verifier "gnark-symmetric-crypto/libraries/verifier/impl"
@@ -383,7 +382,6 @@ func TestFullChaCha20OPRF(t *testing.T) {
 
 	buf, err := json.Marshal(inputParams)
 	assert.NoError(err)
-	fmt.Println(string(buf))
 
 	res := prover.Prove(buf)
 	assert.True(len(res) > 0)
