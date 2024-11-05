@@ -1,3 +1,5 @@
+github.com/PolyhedraZK/ExpanderCompilerCollection v0.0.4 h1:WcfyOdr7R934KRgkMbcjoapi5e05I3V1AKOTK2yVKsc=
+github.com/PolyhedraZK/ExpanderCompilerCollection v0.0.4/go.mod h1:9oJ8yCECb4IOOqFJ3bn0yRaE1p1BjGxfRWR2DdiVz+8=
 github.com/bits-and-blooms/bitset v1.14.3 h1:Gd2c8lSNf9pKXom5JtD7AaKO8o7fGQ2LtFj1436qilA=
 github.com/bits-and-blooms/bitset v1.14.3/go.mod h1:7hO7Gc7Pp1vODcmWvKMRA9BNmbv6a/7QIWpPxHddWR8=
 github.com/blang/semver/v4 v4.0.0 h1:1PFHFE6yCCTv8C1TeyNNarDzntLi7wMI5i/pzqYIsAM=

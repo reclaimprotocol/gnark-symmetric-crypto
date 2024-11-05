@@ -11,7 +11,10 @@ require (
 	golang.org/x/crypto v0.28.0
 )
 
-require github.com/stretchr/testify v1.9.0
+require (
+	github.com/PolyhedraZK/ExpanderCompilerCollection v0.0.4
+	github.com/stretchr/testify v1.9.0
+)
 
 require (
 	github.com/bits-and-blooms/bitset v1.14.3 // indirect

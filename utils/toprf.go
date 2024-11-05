@@ -109,6 +109,43 @@ func TOPRFFinalize(idxs []int, elements []*twistededwards.PointAffine, secretEle
 	return new(big.Int).SetBytes(out), nil
 }
 
+type SharedKey struct {
+	PrivateKey *big.Int
+	PublicKey  *twistededwards.PointAffine
+	Shares     []*Share
+}
+
+func TOPRFGenerateSharedKey(nodes, threshold int) *SharedKey {
+
+	curve := twistededwards.GetEdwardsCurve()
+	sk, _ := rand.Int(rand.Reader, TNBCurveOrder)
+	serverPublic := &twistededwards.PointAffine{}
+	serverPublic.ScalarMultiplication(&curve.Base, sk) // G*sk
+
+	if threshold >= nodes {
+		panic("threshold must be smaller than nodes")
+	}
+
+	shares, err := TOPRFCreateShares(nodes, threshold, sk)
+	if err != nil {
+		panic(err)
+	}
+	shareParams := make([]*Share, len(shares))
+	for i, share := range shares {
+		shareParams[i] = &Share{
+			Index:      i,
+			PrivateKey: share.PrivateKey,
+			PublicKey:  share.PublicKey,
+		}
+	}
+
+	return &SharedKey{
+		PrivateKey: sk,
+		PublicKey:  serverPublic,
+		Shares:     shareParams,
+	}
+}
+
 type Src struct{}
 
 func (Src) Uint64() uint64 {

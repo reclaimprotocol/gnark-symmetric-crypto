@@ -1,0 +1,32 @@
+<!doctype html>
+<!--
+Copyright 2018 The Go Authors. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+<html>
+<script src="wasm_exec.js"></script>
+<head>
+    <meta charset="utf-8">
+    <title>Go wasm</title>
+</head>
+
+
+<script>
+    const go = new Go();
+    WebAssembly.instantiateStreaming(fetch('toprf.wasm'), go.importObject).then((result) => {
+        go.run(result.instance);
+    });
+</script>
+</head>
+<body>
+<button id="btn">Call Keygen</button>
+<script>
+    document.getElementById('btn').addEventListener('click', () => {
+        console.log(Keygen(30, 20));
+    });
+</script>
+</body>
+
+
+</html>

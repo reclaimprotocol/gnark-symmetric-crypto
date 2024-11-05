@@ -1,7 +1,6 @@
 package oprf
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"gnark-symmetric-crypto/utils"
 	"math/big"
@@ -58,6 +57,7 @@ type Share struct {
 	PrivateKey []byte `json:"privateKey"`
 	PublicKey  []byte `json:"publicKey"`
 }
+
 type OutputGenerateParams struct {
 	PrivateKey []byte   `json:"privateKey"`
 	PublicKey  []byte   `json:"publicKey"`
@@ -72,11 +72,6 @@ func TOPRFGenerateSharedKey(params []byte) []byte {
 		panic(err)
 	}
 
-	curve := twistededwards.GetEdwardsCurve()
-	sk, _ := rand.Int(rand.Reader, utils.TNBCurveOrder)
-	serverPublic := &twistededwards.PointAffine{}
-	serverPublic.ScalarMultiplication(&curve.Base, sk) // G*sk
-
 	threshold := inputParams.Threshold
 	nodes := inputParams.Nodes
 
@@ -84,12 +79,9 @@ func TOPRFGenerateSharedKey(params []byte) []byte {
 		panic("threshold must be smaller than nodes")
 	}
 
-	shares, err := utils.TOPRFCreateShares(int(nodes), int(threshold), sk)
-	if err != nil {
-		panic(err)
-	}
-	shareParams := make([]*Share, len(shares))
-	for i, share := range shares {
+	keyParams := utils.TOPRFGenerateSharedKey(int(nodes), int(threshold))
+	shareParams := make([]*Share, nodes)
+	for i, share := range keyParams.Shares {
 		shareParams[i] = &Share{
 			Index:      i,
 			PrivateKey: share.PrivateKey.Bytes(),
@@ -97,8 +89,8 @@ func TOPRFGenerateSharedKey(params []byte) []byte {
 		}
 	}
 	res := &OutputGenerateParams{
-		PrivateKey: sk.Bytes(),
-		PublicKey:  serverPublic.Marshal(),
+		PrivateKey: keyParams.PrivateKey.Bytes(),
+		PublicKey:  keyParams.PublicKey.Marshal(),
 		Shares:     shareParams,
 	}
 
