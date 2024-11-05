@@ -4,10 +4,8 @@ import (
 	"crypto/rand"
 	"gnark-symmetric-crypto/utils"
 	"math/big"
-	"os"
 	"testing"
 
-	"github.com/PolyhedraZK/ExpanderCompilerCollection/ecgo"
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 	tbn254 "github.com/consensys/gnark-crypto/ecc/bn254/twistededwards"
@@ -24,14 +22,6 @@ func TestTOPRF(t *testing.T) {
 	}
 
 	assert.CheckCircuit(&wtns, test.WithCurves(ecc.BN254), test.WithValidAssignment(&wtns))
-
-	circuit, _ := ecgo.Compile(ecc.BN254.ScalarField(), &wtns)
-	c := circuit.GetLayeredCircuit()
-	os.WriteFile("circuit.txt", c.Serialize(), 0o644)
-	inputSolver := circuit.GetInputSolver()
-	witness, _ := inputSolver.SolveInputAuto(&wtns)
-	os.WriteFile("witness.txt", witness.Serialize(), 0o644)
-
 }
 
 func TestMaskUnmask(t *testing.T) {
